@@ -9,6 +9,7 @@ build/
 */build/
 
 # Environment files
+.env
 .env.local
 
 # Logs
@@ -23,6 +24,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+data/
 
 # Coverage directory used by tools like istanbul
 coverage/
@@ -56,9 +58,11 @@ pnpm-lock.yaml
 # Cache files
 .eslintcache
 *.tsbuildinfo
+.gradle/
 
 # swc wasm
 .swc
 
 # Agent files
 .agent/
+.npm_cache
