@@ -91,6 +91,10 @@ public final class AuthService {
     }
 
     public String loginWithFeishu(String code) {
+        return loginWithFeishu(code, null);
+    }
+
+    public String loginWithFeishu(String code, String oauthState) {
         requireFeishuConfiguration();
         var tokenBody = new LinkedMultiValueMap<String, String>();
         tokenBody.add("grant_type", "authorization_code");
@@ -157,17 +161,43 @@ public final class AuthService {
                 profile.name(),
                 profile.avatarUrl()
         );
-        return createSession(userId);
+        return createSession(userId, oauthState);
     }
 
     private String createSession(String userId) {
+        return createSession(userId, null);
+    }
+
+    private String createSession(String userId, String oauthState) {
         String token = UUID.randomUUID() + "-" + UUID.randomUUID();
         repository.createSession(
                 hashToken(token),
                 userId,
-                OffsetDateTime.now(ZoneOffset.UTC).plusDays(7)
+                OffsetDateTime.now(ZoneOffset.UTC).plusDays(7),
+                oauthState
         );
         return token;
+    }
+
+    public ApiModels.AppUser getCliSessionUser(String state) {
+        var row = repository.findSessionByOAuthState(state);
+        return row == null ? null : row.user();
+    }
+
+    public CliLoginResult completeCliLogin(String state) {
+        var row = repository.findSessionByOAuthState(state);
+        if (row == null) {
+            return null;
+        }
+        repository.deleteSessionByTokenHash(row.tokenHash());
+        String token = createSession(row.user().id());
+        return new CliLoginResult(token, row.user());
+    }
+
+    public record CliLoginResult(
+            String token,
+            ApiModels.AppUser user
+    ) {
     }
 
     public static String hashToken(String token) {

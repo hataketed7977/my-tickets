@@ -11,14 +11,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
@@ -72,16 +71,28 @@ public final class AuthController {
             response.sendRedirect(webBaseUrl + "/login?error=access_denied");
             return;
         }
+
+        if (expectedState != null) {
+            handleWebCallback(code, state, expectedState, response);
+        } else {
+            handleCliCallback(code, state, response);
+        }
+    }
+
+    private void handleWebCallback(
+            String code,
+            String state,
+            String expectedState,
+            HttpServletResponse response
+    ) throws IOException {
         if (code == null
                 || state == null
-                || expectedState == null
                 || !state.equals(expectedState)) {
             throw new ApiException(
                     org.springframework.http.HttpStatus.BAD_REQUEST,
                     "飞书登录状态校验失败，请重新登录"
             );
         }
-
         String sessionToken = authService.loginWithFeishu(code);
         clearCookie(response, AuthService.OAUTH_STATE_COOKIE);
         addCookie(
@@ -91,6 +102,46 @@ public final class AuthController {
                 Duration.ofDays(7)
         );
         response.sendRedirect(webBaseUrl + "/");
+    }
+
+    private void handleCliCallback(
+            String code,
+            String state,
+            HttpServletResponse response
+    ) throws IOException {
+        if (code == null || state == null) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "飞书登录状态校验失败，请重新登录"
+            );
+        }
+        authService.loginWithFeishu(code, state);
+        response.setContentType("text/html;charset=UTF-8");
+        response.getWriter().write(
+                "<html><body style=\"font-family:sans-serif;text-align:center;"
+                        + "padding:40px\"><h1>登录成功</h1>"
+                        + "<p>请返回 CLI 继续操作。</p></body></html>"
+        );
+    }
+
+    @PostMapping("/cli/session")
+    public Map<String, String> createCliSession() {
+        String state = authService.createOAuthState();
+        String authorizeUrl = authService.buildFeishuAuthorizeUri(state).toString();
+        return Map.of("sessionId", state, "authorizeUrl", authorizeUrl);
+    }
+
+    @GetMapping("/cli/session/{sessionId}")
+    public Map<String, Object> getCliSession(@PathVariable String sessionId) {
+        var result = authService.completeCliLogin(sessionId);
+        if (result == null) {
+            return Map.of("status", "pending");
+        }
+        return Map.of(
+                "status", "ready",
+                "token", result.token(),
+                "user", result.user()
+        );
     }
 
     @GetMapping("/me")

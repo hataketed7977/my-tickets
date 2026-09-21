@@ -5,6 +5,7 @@ import com.bytedance.tickets.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -31,6 +32,9 @@ public final class SessionInterceptor implements HandlerInterceptor {
             return true;
         }
         var token = cookieValue(request, AuthService.SESSION_COOKIE);
+        if (token == null) {
+            token = bearerToken(request);
+        }
         var user = authService.getSessionUser(token);
         if (user == null) {
             throw new ApiException(
@@ -52,5 +56,13 @@ public final class SessionInterceptor implements HandlerInterceptor {
                 .map(Cookie::getValue)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String bearerToken(HttpServletRequest request) {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7).trim();
+        }
+        return null;
     }
 }

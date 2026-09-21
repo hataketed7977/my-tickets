@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS user_session (
   id_hash VARCHAR(64) PRIMARY KEY,
   user_id VARCHAR(100) NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  oauth_state VARCHAR(128)
 );
 
 CREATE TABLE IF NOT EXISTS issue_category (
@@ -37,6 +38,8 @@ CREATE TABLE IF NOT EXISTS ticket (
 );
 
 CREATE INDEX IF NOT EXISTS idx_session_expiry ON user_session(expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_oauth_state
+  ON user_session(oauth_state);
 CREATE INDEX IF NOT EXISTS idx_ticket_status_updated
   ON ticket(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ticket_category ON ticket(category_id);

@@ -20,9 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "app.feishu.app-id=",
-        "app.feishu.app-secret=",
-        "app.feishu.redirect-uri=",
+        "app.feishu.app-id=cli_test_app",
+        "app.feishu.app-secret=test_secret",
+        "app.feishu.redirect-uri=http://localhost:55888/api/auth/feishu/callback",
         "spring.datasource.url=jdbc:h2:mem:tickets-test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
 })
 @AutoConfigureMockMvc
@@ -66,7 +66,7 @@ class TicketApiTest {
     void exposesOnlyFeishuAuthentication() throws Exception {
         mockMvc.perform(get("/api/auth/config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.feishuConfigured").value(false));
+                .andExpect(jsonPath("$.feishuConfigured").value(true));
 
         mockMvc.perform(
                         post("/api/auth/local-login")
@@ -359,6 +359,73 @@ class TicketApiTest {
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void supportsBearerTokenAuthentication() throws Exception {
+        mockMvc.perform(
+                        get("/api/auth/me")
+                                .header("Authorization", "Bearer " + TEST_TOKEN)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("test-reporter"));
+
+        mockMvc.perform(
+                        get("/api/auth/me")
+                                .header("Authorization", "Bearer invalid-token")
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.message").value("请先登录"));
+    }
+
+    @Test
+    void supportsCliSessionLoginFlow() throws Exception {
+        var createResult = mockMvc.perform(post("/api/auth/cli/session"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionId").exists())
+                .andExpect(jsonPath("$.authorizeUrl").exists())
+                .andReturn();
+
+        String sessionId = objectMapper.readTree(
+                createResult.getResponse().getContentAsString()
+        ).get("sessionId").asText();
+
+        mockMvc.perform(get("/api/auth/cli/session/{id}", sessionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("pending"));
+
+        jdbc.update(
+                """
+                INSERT INTO user_session (id_hash, user_id, expires_at, oauth_state)
+                VALUES (?, 'test-reporter', DATEADD('DAY', 1, CURRENT_TIMESTAMP), ?)
+                """,
+                AuthService.hashToken("cli-callback-token"),
+                sessionId
+        );
+
+        var readyResult = mockMvc.perform(
+                        get("/api/auth/cli/session/{id}", sessionId)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ready"))
+                .andExpect(jsonPath("$.token").exists())
+                .andExpect(jsonPath("$.user.id").value("test-reporter"))
+                .andReturn();
+
+        String issuedToken = objectMapper.readTree(
+                readyResult.getResponse().getContentAsString()
+        ).get("token").asText();
+
+        mockMvc.perform(get("/api/auth/cli/session/{id}", sessionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("pending"));
+
+        mockMvc.perform(
+                        get("/api/auth/me")
+                                .header("Authorization", "Bearer " + issuedToken)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("test-reporter"));
     }
 
     private String createTicket(Cookie sessionCookie, String categoryId)

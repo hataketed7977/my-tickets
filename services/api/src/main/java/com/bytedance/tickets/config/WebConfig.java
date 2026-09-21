@@ -29,7 +29,9 @@ public final class WebConfig implements WebMvcConfigurer {
                         "/api/auth/config",
                         "/api/auth/feishu",
                         "/api/auth/feishu/callback",
-                        "/api/auth/local-login"
+                        "/api/auth/local-login",
+                        "/api/auth/cli/session",
+                        "/api/auth/cli/session/**"
                 );
     }
 
