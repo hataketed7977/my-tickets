@@ -413,14 +413,17 @@ export function TicketDetailsSheet({
                           {data.categories
                             .filter(
                               (category: IssueCategoryItem) =>
-                                category.isActive,
+                                category.isActive
+                                || category.id === ticket.categoryId,
                             )
                             .map((category: IssueCategoryItem) => (
                               <SelectItem
                                 key={category.id}
                                 value={category.id}
+                                disabled={!category.isActive}
                               >
                                 {category.name}
+                                {category.isActive ? '' : '（已停用）'}
                               </SelectItem>
                             ))}
                         </SelectGroup>

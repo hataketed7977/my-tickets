@@ -2,7 +2,7 @@ package com.bytedance.tickets.controller;
 
 import com.bytedance.tickets.model.ApiModels;
 import com.bytedance.tickets.security.SessionInterceptor;
-import com.bytedance.tickets.service.WorkOrderService;
+import com.bytedance.tickets.service.TicketService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,12 +19,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/work-orders")
-public final class WorkOrderController {
-    private final WorkOrderService workOrders;
+@RequestMapping("/api")
+public final class TicketController {
+    private final TicketService tickets;
 
-    public WorkOrderController(WorkOrderService workOrders) {
-        this.workOrders = workOrders;
+    public TicketController(TicketService tickets) {
+        this.tickets = tickets;
     }
 
     @GetMapping("/tickets")
@@ -36,7 +36,7 @@ public final class WorkOrderController {
             @RequestParam(required = false) String priority,
             @RequestParam(required = false) String categoryId
     ) {
-        return workOrders.listTickets(
+        return tickets.listTickets(
                 page,
                 pageSize,
                 search,
@@ -48,7 +48,7 @@ public final class WorkOrderController {
 
     @GetMapping("/tickets/{id}")
     public ApiModels.TicketItem getTicket(@PathVariable String id) {
-        return workOrders.getTicket(id);
+        return tickets.getTicket(id);
     }
 
     @PostMapping("/tickets")
@@ -57,7 +57,7 @@ public final class WorkOrderController {
             HttpServletRequest servletRequest
     ) {
         var user = currentUser(servletRequest);
-        return workOrders.createTicket(request, user.id());
+        return tickets.createTicket(request, user.id());
     }
 
     @PatchMapping("/tickets/{id}")
@@ -65,25 +65,25 @@ public final class WorkOrderController {
             @PathVariable String id,
             @Valid @RequestBody ApiModels.UpdateTicketRequest request
     ) {
-        return workOrders.updateTicket(id, request);
+        return tickets.updateTicket(id, request);
     }
 
     @DeleteMapping("/tickets/{id}")
     @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     public void deleteTicket(@PathVariable String id) {
-        workOrders.deleteTicket(id);
+        tickets.deleteTicket(id);
     }
 
     @GetMapping("/categories")
     public List<ApiModels.IssueCategoryItem> listCategories() {
-        return workOrders.listCategories();
+        return tickets.listCategories();
     }
 
     @PostMapping("/categories")
     public ApiModels.IssueCategoryItem createCategory(
             @Valid @RequestBody ApiModels.CreateIssueCategoryRequest request
     ) {
-        return workOrders.createCategory(request);
+        return tickets.createCategory(request);
     }
 
     @PatchMapping("/categories/{id}")
@@ -91,13 +91,13 @@ public final class WorkOrderController {
             @PathVariable String id,
             @Valid @RequestBody ApiModels.UpdateIssueCategoryRequest request
     ) {
-        return workOrders.updateCategory(id, request);
+        return tickets.updateCategory(id, request);
     }
 
     @DeleteMapping("/categories/{id}")
     @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     public void deleteCategory(@PathVariable String id) {
-        workOrders.deleteCategory(id);
+        tickets.deleteCategory(id);
     }
 
     private ApiModels.AppUser currentUser(HttpServletRequest request) {

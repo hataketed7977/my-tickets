@@ -17,7 +17,7 @@ import {
 import { apiUrl } from '@/api/request';
 
 export default function LoginPage() {
-  const { config } = useAuth();
+  const { config, initializationError } = useAuth();
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
@@ -32,7 +32,13 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {config?.feishuConfigured ? (
+          {initializationError ? (
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>登录服务暂不可用</AlertTitle>
+              <AlertDescription>{initializationError}</AlertDescription>
+            </Alert>
+          ) : config?.feishuConfigured ? (
             <Button asChild>
               <a href={apiUrl('/api/auth/feishu')}>
                 <LogInIcon data-icon="inline-start" />

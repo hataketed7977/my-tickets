@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.url=jdbc:h2:mem:tickets-test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
 })
 @AutoConfigureMockMvc
-class WorkOrderApiTest {
+class TicketApiTest {
     private static final String TEST_TOKEN = "test-session-token";
 
     @Autowired
@@ -43,6 +43,7 @@ class WorkOrderApiTest {
         jdbc.update("DELETE FROM ticket");
         jdbc.update("DELETE FROM user_session");
         jdbc.update("DELETE FROM app_user");
+        jdbc.update("UPDATE issue_category SET is_active = TRUE");
         jdbc.update(
                 """
                 INSERT INTO app_user (
@@ -74,7 +75,7 @@ class WorkOrderApiTest {
                 )
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(get("/api/work-orders/tickets"))
+        mockMvc.perform(get("/api/tickets"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.message").value("请先登录"));
     }
@@ -88,7 +89,7 @@ class WorkOrderApiTest {
         String categoryId = "52222222-2222-4222-8222-222222222222";
 
         var createResult = mockMvc.perform(
-                        post("/api/work-orders/tickets")
+                        post("/api/tickets")
                                 .cookie(sessionCookie)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -110,14 +111,14 @@ class WorkOrderApiTest {
         ).get("id").asText();
 
         mockMvc.perform(
-                        get("/api/work-orders/tickets/{id}", ticketId)
+                        get("/api/tickets/{id}", ticketId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(ticketId));
 
         mockMvc.perform(
-                        patch("/api/work-orders/tickets/{id}", ticketId)
+                        patch("/api/tickets/{id}", ticketId)
                                 .cookie(sessionCookie)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -135,13 +136,13 @@ class WorkOrderApiTest {
                 .andExpect(jsonPath("$.priority").value("urgent"));
 
         mockMvc.perform(
-                        delete("/api/work-orders/tickets/{id}", ticketId)
+                        delete("/api/tickets/{id}", ticketId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(
-                        get("/api/work-orders/tickets/{id}", ticketId)
+                        get("/api/tickets/{id}", ticketId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNotFound());
@@ -155,7 +156,7 @@ class WorkOrderApiTest {
         );
 
         var createResult = mockMvc.perform(
-                        post("/api/work-orders/categories")
+                        post("/api/categories")
                                 .cookie(sessionCookie)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -174,7 +175,7 @@ class WorkOrderApiTest {
         ).get("id").asText();
 
         mockMvc.perform(
-                        patch("/api/work-orders/categories/{id}", categoryId)
+                        patch("/api/categories/{id}", categoryId)
                                 .cookie(sessionCookie)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -188,13 +189,13 @@ class WorkOrderApiTest {
                 .andExpect(jsonPath("$.name").value("打印机服务"));
 
         mockMvc.perform(
-                        delete("/api/work-orders/categories/{id}", categoryId)
+                        delete("/api/categories/{id}", categoryId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(
-                        delete("/api/work-orders/categories/{id}", categoryId)
+                        delete("/api/categories/{id}", categoryId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNotFound());
@@ -209,7 +210,7 @@ class WorkOrderApiTest {
         String categoryId = "52222222-2222-4222-8222-222222222222";
 
         mockMvc.perform(
-                        post("/api/work-orders/tickets")
+                        post("/api/tickets")
                                 .cookie(sessionCookie)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -224,13 +225,120 @@ class WorkOrderApiTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(
-                        delete("/api/work-orders/categories/{id}", categoryId)
+                        delete("/api/categories/{id}", categoryId)
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.message").value(
                         "该分类下仍有工单，无法删除"
                 ));
+    }
+
+    @Test
+    void allowsEditingTicketWithItsInactiveCategory() throws Exception {
+        var sessionCookie = new Cookie(
+                AuthService.SESSION_COOKIE,
+                TEST_TOKEN
+        );
+        String categoryId = "52222222-2222-4222-8222-222222222222";
+        String ticketId = createTicket(sessionCookie, categoryId);
+
+        mockMvc.perform(
+                        patch("/api/categories/{id}", categoryId)
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"isActive\":false}")
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isActive").value(false));
+
+        mockMvc.perform(
+                        patch("/api/tickets/{id}", ticketId)
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "title": "停用分类下仍可编辑",
+                                          "categoryId": "%s"
+                                        }
+                                        """.formatted(categoryId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("停用分类下仍可编辑"))
+                .andExpect(jsonPath("$.categoryId").value(categoryId));
+    }
+
+    @Test
+    void preservesResolvedAtWhenTerminalTicketIsEdited() throws Exception {
+        var sessionCookie = new Cookie(
+                AuthService.SESSION_COOKIE,
+                TEST_TOKEN
+        );
+        String categoryId = "52222222-2222-4222-8222-222222222222";
+        String ticketId = createTicket(sessionCookie, categoryId);
+
+        mockMvc.perform(
+                        patch("/api/tickets/{id}", ticketId)
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"status\":\"resolved\"}")
+                )
+                .andExpect(status().isOk());
+
+        String resolvedAt = "2024-01-02T03:04:05Z";
+        jdbc.update(
+                "UPDATE ticket SET resolved_at = ? WHERE id = ?",
+                java.time.OffsetDateTime.parse(resolvedAt),
+                ticketId
+        );
+
+        mockMvc.perform(
+                        patch("/api/tickets/{id}", ticketId)
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "title": "终态工单内容调整",
+                                          "status": "resolved"
+                                        }
+                                        """)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolvedAt").value(resolvedAt));
+    }
+
+    @Test
+    void validatesNormalizedTextFields() throws Exception {
+        var sessionCookie = new Cookie(
+                AuthService.SESSION_COOKIE,
+                TEST_TOKEN
+        );
+        String categoryId = "52222222-2222-4222-8222-222222222222";
+
+        mockMvc.perform(
+                        post("/api/tickets")
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "title": " a ",
+                                          "description": "这是有效的问题描述",
+                                          "categoryId": "%s",
+                                          "priority": "medium"
+                                        }
+                                        """.formatted(categoryId))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fieldErrors.title").exists());
+
+        mockMvc.perform(
+                        patch("/api/categories/{id}", categoryId)
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"  \"}")
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fieldErrors.name").exists());
     }
 
     @Test
@@ -241,15 +349,37 @@ class WorkOrderApiTest {
         );
 
         mockMvc.perform(
-                        get("/api/work-orders/overview")
+                        get("/api/overview")
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(
-                        get("/api/work-orders/groups")
+                        get("/api/groups")
                                 .cookie(sessionCookie)
                 )
                 .andExpect(status().isNotFound());
+    }
+
+    private String createTicket(Cookie sessionCookie, String categoryId)
+            throws Exception {
+        var result = mockMvc.perform(
+                        post("/api/tickets")
+                                .cookie(sessionCookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "title": "测试工单",
+                                          "description": "用于验证工单更新行为。",
+                                          "categoryId": "%s",
+                                          "priority": "medium"
+                                        }
+                                        """.formatted(categoryId))
+                )
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(
+                result.getResponse().getContentAsString()
+        ).get("id").asText();
     }
 }

@@ -62,6 +62,12 @@ public final class ApiModels {
             @Pattern(regexp = "low|medium|high|urgent")
             String priority
     ) {
+        public CreateTicketRequest {
+            title = trim(title);
+            description = trim(description);
+            categoryId = trim(categoryId);
+            priority = trim(priority);
+        }
     }
 
     public static final class UpdateTicketRequest {
@@ -106,27 +112,27 @@ public final class ApiModels {
         }
 
         public void setTitle(String value) {
-            title = value;
+            title = trim(value);
         }
 
         public void setDescription(String value) {
-            description = value;
+            description = trim(value);
         }
 
         public void setCategoryId(String value) {
-            categoryId = value;
+            categoryId = trim(value);
         }
 
         public void setStatus(String value) {
-            status = value;
+            status = trim(value);
         }
 
         public void setPriority(String value) {
-            priority = value;
+            priority = trim(value);
         }
 
         public void setAssigneeUserId(String value) {
-            assigneeUserId = value;
+            assigneeUserId = trimToNull(value);
             assigneeUserIdPresent = true;
         }
     }
@@ -135,6 +141,10 @@ public final class ApiModels {
             @NotBlank @Size(min = 2, max = 100) String name,
             @Size(max = 500) String description
     ) {
+        public CreateIssueCategoryRequest {
+            name = trim(name);
+            description = trim(description);
+        }
     }
 
     public static final class UpdateIssueCategoryRequest {
@@ -157,16 +167,25 @@ public final class ApiModels {
         }
 
         public void setName(String value) {
-            name = value;
+            name = trim(value);
         }
 
         public void setDescription(String value) {
-            description = value;
+            description = trim(value);
         }
 
         public void setIsActive(Boolean value) {
             isActive = value;
         }
+    }
+
+    private static String trim(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private static String trimToNull(String value) {
+        String trimmed = trim(value);
+        return trimmed == null || trimmed.isEmpty() ? null : trimmed;
     }
 
 }

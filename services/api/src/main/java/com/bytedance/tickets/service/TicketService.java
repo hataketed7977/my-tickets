@@ -2,7 +2,7 @@ package com.bytedance.tickets.service;
 
 import com.bytedance.tickets.exception.ApiException;
 import com.bytedance.tickets.model.ApiModels;
-import com.bytedance.tickets.repository.WorkOrderRepository;
+import com.bytedance.tickets.repository.TicketRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -11,15 +11,16 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
 @Service
-public final class WorkOrderService {
-    private final WorkOrderRepository repository;
+public final class TicketService {
+    private final TicketRepository repository;
 
-    public WorkOrderService(WorkOrderRepository repository) {
+    public TicketService(TicketRepository repository) {
         this.repository = repository;
     }
 
@@ -70,18 +71,21 @@ public final class WorkOrderService {
             String id,
             ApiModels.UpdateTicketRequest request
     ) {
-        getTicket(id);
-        if (request.categoryId() != null) {
+        var existing = getTicket(id);
+        if (request.categoryId() != null
+                && !request.categoryId().equals(existing.categoryId())) {
             assertActiveCategory(request.categoryId());
         }
         if (request.assigneeUserIdPresent()) {
             assertUserExists(request.assigneeUserId());
         }
 
-        OffsetDateTime resolvedAt = null;
-        if ("resolved".equals(request.status())
-                || "closed".equals(request.status())) {
-            resolvedAt = OffsetDateTime.now();
+        OffsetDateTime resolvedAt = existing.resolvedAt();
+        if (request.status() != null
+                && !request.status().equals(existing.status())) {
+            resolvedAt = isTerminalStatus(request.status())
+                    ? OffsetDateTime.now(ZoneOffset.UTC)
+                    : null;
         }
         repository.updateTicket(id, request, resolvedAt);
         return getTicket(id);
@@ -165,6 +169,10 @@ public final class WorkOrderService {
                 && !repository.userExists(userId)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "用户不存在");
         }
+    }
+
+    private boolean isTerminalStatus(String status) {
+        return "resolved".equals(status) || "closed".equals(status);
     }
 
     private String createTicketNumber() {

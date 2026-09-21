@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class WorkOrderRepository {
+public class TicketRepository {
     private static final String TICKET_SELECT = """
             SELECT
               t.id,
@@ -38,7 +38,7 @@ public class WorkOrderRepository {
 
     private final JdbcTemplate jdbc;
 
-    public WorkOrderRepository(JdbcTemplate jdbc) {
+    public TicketRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 

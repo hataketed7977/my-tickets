@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { authApi, usersApi } from '@/api';
+import { getErrorMessage } from '@/lib/errors';
 import type { AppUser, AuthConfig } from '@/types/api';
 
 interface AuthContextValue {
@@ -15,6 +16,7 @@ interface AuthContextValue {
   currentUser: AppUser | null;
   users: AppUser[];
   loading: boolean;
+  initializationError: string | null;
   logout: () => Promise<void>;
 }
 
@@ -25,10 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [initializationError, setInitializationError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
     const initialize = async (): Promise<void> => {
+      setInitializationError(null);
       try {
         const configRequest: Promise<AuthConfig> = authApi.getConfig();
         const userRequest: Promise<AppUser | null> = authApi
@@ -51,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setUsers([]);
         }
+      } catch (error: unknown) {
+        if (active) setInitializationError(getErrorMessage(error));
       } finally {
         if (active) setLoading(false);
       }
@@ -80,9 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentUser,
       users,
       loading,
+      initializationError,
       logout,
     }),
-    [config, currentUser, users, loading],
+    [config, currentUser, users, loading, initializationError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

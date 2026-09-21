@@ -35,7 +35,7 @@ export function listCategories(): Promise<IssueCategoryItem[]> {
     categoriesCache,
     () =>
       request<IssueCategoryItem[]>(
-        { url: '/api/work-orders/categories', method: 'GET' },
+        { url: '/api/categories', method: 'GET' },
         '加载问题分类失败',
       ),
     (next: CachedRequest<IssueCategoryItem[]> | null) => {
@@ -48,7 +48,7 @@ export function createCategory(
   body: CreateIssueCategoryRequest,
 ): Promise<IssueCategoryItem> {
   return request<IssueCategoryItem>(
-    { url: '/api/work-orders/categories', method: 'POST', data: body },
+    { url: '/api/categories', method: 'POST', data: body },
     '创建问题分类失败',
   ).then((category: IssueCategoryItem) => {
     categoriesCache = null;
@@ -62,7 +62,7 @@ export function updateCategory(
 ): Promise<IssueCategoryItem> {
   return request<IssueCategoryItem>(
     {
-      url: `/api/work-orders/categories/${id}`,
+      url: `/api/categories/${id}`,
       method: 'PATCH',
       data: body,
     },
@@ -75,7 +75,7 @@ export function updateCategory(
 
 export function deleteCategory(id: string): Promise<void> {
   return request<void>(
-    { url: `/api/work-orders/categories/${id}`, method: 'DELETE' },
+    { url: `/api/categories/${id}`, method: 'DELETE' },
     '删除问题分类失败',
   ).then(() => {
     categoriesCache = null;
