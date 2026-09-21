@@ -1,9 +1,9 @@
 ---
-name: doubao-mcp-integration
+name: doubao-mcp-builder
 description: Build MCP integrations for Doubao Work over local stdio or remote Streamable HTTP with OAuth 2.1. Use when exposing private systems or local tools to Doubao.
 ---
 
-# Doubao MCP Integration
+# 豆包 MCP Builder
 
 Implement the integration in the target repository. Do not stop at architecture notes unless the user asks for design only.
 
