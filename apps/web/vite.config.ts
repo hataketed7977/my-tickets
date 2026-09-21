@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
+    host: 'localhost',
     port: Number(process.env.WEB_PORT ?? 51888),
     strictPort: true,
     proxy: {
