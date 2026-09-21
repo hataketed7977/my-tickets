@@ -51,7 +51,12 @@ Put a maintained OAuth authorization server or identity gateway in front of it. 
 
 ### D. HTTP when the existing system only has cookie sessions
 
-Keep browser sessions for the web app. Add a separate OAuth boundary for `/mcp`; exchange user authentication at the authorization server, not inside a tool call. Never send the web session cookie to the MCP client.
+Keep browser sessions for the web app. Add a maintained authorization server
+or identity gateway as the OAuth boundary for `/mcp`; federate or bridge the
+existing authenticated user into it. Exchange user authentication at the
+authorization server, not inside a tool call. Do not implement authorization
+and token endpoints in the MCP transport module. Never send the web session
+cookie to the MCP client.
 
 ### E. Either transport calls a separately protected downstream API
 
@@ -232,42 +237,14 @@ function requireScope(principal: Principal, scope: string): void {
 
 Do not copy v1 examples using the monolithic `@modelcontextprotocol/sdk` package into a v2 implementation. Check the installed SDK's examples for exact transport APIs before coding.
 
-## Spring Boot Guidance
+## Spring Boot Routing
 
-For HTTP, use Spring Security OAuth2 Resource Server for JWT or opaque-token validation. Add an explicit audience validator; issuer validation alone is insufficient.
-
-Illustrative JWT validator:
-
-```java
-OAuth2TokenValidator<Jwt> issuer =
-    JwtValidators.createDefaultWithIssuer(properties.issuer());
-
-OAuth2TokenValidator<Jwt> audience = jwt ->
-    jwt.getAudience().contains(properties.resource())
-        ? OAuth2TokenValidatorResult.success()
-        : OAuth2TokenValidatorResult.failure(
-            new OAuth2Error("invalid_token", "Token audience is not this MCP server", null));
-
-NimbusJwtDecoder decoder =
-    JwtDecoders.fromIssuerLocation(properties.issuer());
-decoder.setJwtValidator(
-    new DelegatingOAuth2TokenValidator<>(issuer, audience));
-```
-
-Configure the MCP route as authenticated and keep web-session rules separate:
-
-```java
-http
-    .securityMatcher("/mcp", "/.well-known/oauth-protected-resource/**")
-    .authorizeHttpRequests(auth -> auth
-        .requestMatchers("/.well-known/oauth-protected-resource/**").permitAll()
-        .requestMatchers("/mcp").authenticated())
-    .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()));
-```
-
-Add a custom authentication entry point so a missing or invalid token returns the required `WWW-Authenticate` challenge. Use the current official MCP Java/Spring SDK where it supports the required protocol revision; do not hand-write JSON-RPC dispatch.
-
-For stdio, use the SDK's stdio server transport and a separate main class or launch profile. Do not initialize the web server or write Spring startup logs to `stdout`; route all process logging to `stderr`.
+For Spring Boot or Spring AI repositories, read
+`spring-ai-streamable-http-oauth.md` and follow its version matrix, recommended
+authorization-server architecture, security-chain pattern, fixed
+implementation gates, and compatibility tests. Do not copy partial Spring
+snippets from this generic architecture reference or hand-write JSON-RPC and
+OAuth protocol handling.
 
 ## Scope and Product Permission Mapping
 
@@ -324,7 +301,7 @@ Emit structured records:
   "request_id": "req_...",
   "subject_hash": "...",
   "client_id": "...",
-  "tool": "tickets_get_ticket",
+  "tool": "get_ticket",
   "scope_decision": "allow",
   "result": "success",
   "duration_ms": 42

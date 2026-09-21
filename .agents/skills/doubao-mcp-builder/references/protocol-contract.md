@@ -4,6 +4,18 @@ Use this only for remote Streamable HTTP. It targets MCP `2026-07-28` and record
 
 Do not apply this OAuth transport flow to stdio. For stdio, the client launches a local subprocess and credentials are supplied through the local execution boundary or used only for downstream APIs; read `transport-selection.md`.
 
+This document is a protocol acceptance contract, not an implementation recipe
+for custom OAuth endpoints. Delegate client registration, authorization-code
+issuance, PKCE enforcement, token issuance, refresh, revocation, and signing
+key management to an existing, managed, or framework-provided authorization
+server. Implement only protected-resource metadata, bearer validation, scope
+enforcement, and product authorization in the MCP server.
+
+Use a custom authorization facade only for an explicitly disposable prototype
+or a separately reviewed compatibility exception. Passing the checks below is
+necessary but does not by itself make a custom authorization server
+production-ready.
+
 ## Roles and Trust Boundaries
 
 Keep these roles explicit:

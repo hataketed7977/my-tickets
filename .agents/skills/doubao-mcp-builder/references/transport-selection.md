@@ -4,13 +4,17 @@ Choose the transport before designing authentication or deployment. MCP tool sem
 
 ## Decision
 
-Choose **stdio** when all are true:
+Choose **stdio** when both core conditions are true:
 
 - Doubao Work can launch a command on the user's machine;
+- central multi-user availability is not required.
+
+These are supporting signals, not additional mandatory conditions:
+
 - the MCP server and required runtime can be installed locally;
 - one local user or desktop session owns the process;
 - the tool needs local files, local applications, CLI programs, or developer credentials;
-- central multi-user availability is not required.
+- local installation and upgrade are operationally acceptable.
 
 Choose **Streamable HTTP** when any are true:
 
@@ -21,6 +25,11 @@ Choose **Streamable HTTP** when any are true:
 - access must work across devices.
 
 Support **both** when local development or local-device access and centrally hosted production access are both real requirements. Share one tool catalog and business layer; add two thin entry points.
+
+When the core conditions conflict, choose Streamable HTTP unless the user has
+an explicit requirement for a separate local adapter. Do not treat "the source
+application is a web app" or "development happens locally" as a transport
+decision.
 
 ## Comparison
 

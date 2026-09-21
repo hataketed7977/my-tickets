@@ -4,6 +4,22 @@ Use current official documentation for the exact Doubao surface named by the use
 
 This reference separates Doubao Work's local stdio and remote HTTP paths, then records the verified Volcano Ark Managed Agents path as of 2026-09-21. Do not assume Doubao Work, Responses API, AgentKit, and Managed Agents share configuration fields or OAuth behavior.
 
+## Freshness Gate
+
+Treat product-specific fields and OAuth behavior below as a dated capability
+snapshot. Re-check only the official source for the selected Doubao surface
+when any are true:
+
+- the recorded verification is more than 30 days old;
+- the user names a different Doubao surface;
+- a documented field, credential type, or endpoint is rejected;
+- the target client negotiates a different MCP revision;
+- interactive OAuth behavior is required but has not been observed.
+
+Record the product surface, documentation URL, verification date, MCP
+revision, and tested credential mode. Do not broaden the search to every
+Doubao product once the target surface is known.
+
 ## Confirm the Target Surface
 
 Identify one:
@@ -95,8 +111,8 @@ Declare the server and its toolset together:
         "enabled": false
       },
       "configs": [
-        {"name": "tickets_search_tickets", "enabled": true},
-        {"name": "tickets_get_ticket", "enabled": true}
+        {"name": "search_tickets", "enabled": true},
+        {"name": "get_ticket", "enabled": true}
       ]
     }
   ]

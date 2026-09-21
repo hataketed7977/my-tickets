@@ -17,26 +17,31 @@ Do not expose CRUD mechanically. Model the user's tasks.
 Use:
 
 ```text
-domain_verb_object
+verb_object
 ```
 
 Examples:
 
 ```text
-tickets_search_tickets
-tickets_get_ticket
-tickets_create_ticket
-tickets_add_comment
+search_tickets
+get_ticket
+create_ticket
+add_ticket_comment
+get_current_user
 ```
 
 Rules:
 
 - snake_case ASCII;
-- globally understandable without server context;
 - one verb and one concrete object;
+- globally understandable from the tool name and description;
 - no abbreviations unless users already use them;
 - no version suffixes;
 - no similar pairs such as `find_ticket` and `search_tickets`.
+
+Add a domain prefix only when the target client merges tools from multiple
+servers into one namespace and an observed collision exists. Do not produce
+redundant names such as `tickets_search_tickets`.
 
 ## Descriptions
 
@@ -49,7 +54,7 @@ Use this fixed shape:
 Example:
 
 ```text
-Return one ticket by its exact ticket ID, including status and assignee. Use when the user already supplied or selected an ID. Requires tickets:read. Does not search by title; use tickets_search_tickets.
+Return one ticket by its exact ticket ID, including status and assignee. Use when the user already supplied or selected an ID. Requires tickets:read. Does not search by title; use search_tickets.
 ```
 
 Keep the first sentence decisive. Do not include protocol history, implementation details, or marketing language.
@@ -172,7 +177,7 @@ Use one error envelope:
     "code": "TICKET_VERSION_CONFLICT",
     "message": "Ticket TKT-1234 changed after it was read.",
     "retryable": false,
-    "next_action": "Call tickets_get_ticket, review the new version, then retry."
+    "next_action": "Call get_ticket, review the new version, then retry."
   },
   "meta": {
     "request_id": "req_..."
@@ -214,10 +219,10 @@ Map every tool to exactly one minimum scope in a checked-in table:
 
 | Tool | Scope | Product check |
 | --- | --- | --- |
-| `tickets_search_tickets` | `tickets:read` | tenant and visibility filter |
-| `tickets_get_ticket` | `tickets:read` | object visibility |
-| `tickets_create_ticket` | `tickets:write` | category and assignee validity |
-| `tickets_add_comment` | `tickets:write` | ticket visibility and state |
+| `search_tickets` | `tickets:read` | tenant and visibility filter |
+| `get_ticket` | `tickets:read` | object visibility |
+| `create_ticket` | `tickets:write` | category and assignee validity |
+| `add_ticket_comment` | `tickets:write` | ticket visibility and state |
 
 Do not let the model supply a tenant ID or user ID to bypass the verified principal context.
 

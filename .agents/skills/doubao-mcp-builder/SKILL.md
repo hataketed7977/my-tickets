@@ -1,6 +1,6 @@
 ---
 name: doubao-mcp-builder
-description: Build MCP integrations for Doubao Work over local stdio or remote Streamable HTTP with OAuth 2.1. Use when exposing private systems or local tools to Doubao.
+description: Build MCP integrations for Doubao using local stdio or remote Streamable HTTP with OAuth 2.1. Use for Doubao MCP, private-system tools exposed to Doubao, or Doubao-compatible remote MCP services.
 ---
 
 # 豆包 MCP Builder
@@ -15,11 +15,30 @@ Do not:
 
 - replace the product's existing login or authorization model;
 - build a new identity provider when a maintained OAuth authorization server can be used;
+- hand-write OAuth authorization or token endpoints for production;
 - pass an upstream or downstream API token through as the MCP access token;
 - add role systems, admin concepts, or broad scopes not already required by the product;
 - expose every internal API as a tool;
 - use MCP OAuth for local stdio transport;
 - expose a local stdio server as a network listener.
+
+## Default Recommendation
+
+Choose the first matching row and stop reconsidering unless repository evidence
+invalidates it:
+
+| Situation | Recommended architecture |
+| --- | --- |
+| One user, local files or local CLI, Doubao launches the process | Official MCP SDK with stdio; no MCP OAuth |
+| Remote or shared service with an existing OAuth/OIDC authorization server | Official MCP SDK with Streamable HTTP plus a resource server that trusts the existing issuer |
+| Remote service with only cookie or social login | Add a maintained authorization server or identity gateway, federate the existing login, and keep `/mcp` as a resource server |
+| Existing product API is separately protected | Use token exchange, on-behalf-of, a service credential, or an encrypted per-user credential; never pass through the MCP token |
+
+For Spring Boot, default to Spring AI for MCP transport, Spring Security OAuth2
+Resource Server for bearer validation, and the existing authorization server
+or Spring Authorization Server for OAuth. A custom authorization facade is
+allowed only for an explicitly disposable prototype; label it non-production
+and include the hardening gaps in the completion report.
 
 ## Required References
 
@@ -31,6 +50,7 @@ Read only the files needed for the current phase:
 4. Read [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md) before defining tools.
 5. Read [doubao-integration.md](references/doubao-integration.md) for the target Doubao surface.
 6. Read [verification.md](references/verification.md) before writing tests or declaring completion.
+7. Read [spring-ai-streamable-http-oauth.md](references/spring-ai-streamable-http-oauth.md) when the target is Spring Boot/Spring AI or when a proven OAuth-to-tool vertical slice is useful.
 
 Do not load all references at once.
 
@@ -50,6 +70,23 @@ Inspect the repository before proposing changes. Record:
 - operations users actually need.
 
 Ask only for facts that cannot be discovered and that block a secure implementation. Never request secrets in chat or commit them.
+
+### 1.5 Reuse a Proven Recipe
+
+Before researching framework APIs from scratch:
+
+1. identify the repository framework and installed versions;
+2. load the matching reference recipe when one exists;
+3. select one row from Default Recommendation;
+4. freeze an SDK, framework, MCP revision, issuer, resource, registration mode, and target-client compatibility matrix;
+5. compile a minimal dependency and transport spike;
+6. write one focused end-to-end test covering authentication, initialization, tool listing, and one tool call.
+
+Timebox manual HTTP probing until the focused test passes. Use a managed foreground or tool-owned server process for smoke tests; do not repeatedly launch detached processes and infer protocol failures from stale or terminated servers.
+
+Do not branch into multiple speculative implementations. When an API is
+uncertain, inspect the installed dependency or its official example once,
+record the result in the compatibility matrix, and continue with that version.
 
 ### 2. Select the Transport
 
@@ -82,7 +119,8 @@ For HTTP, use this order:
 
 1. Existing standards-compliant authorization server plus MCP resource server.
 2. Managed authorization server or gateway plus MCP resource server.
-3. A thin authorization facade only when the existing identity system cannot issue OAuth tokens.
+3. A maintained framework authorization server federated to the existing identity system.
+4. A custom authorization facade only for an explicitly disposable prototype or separately reviewed compatibility exception.
 
 Keep the MCP transport adapter, token validation, business service, and downstream credential handling separate.
 
@@ -141,11 +179,21 @@ python3 scripts/verify_remote_mcp.py \
 
 For write tools, test denial, confirmation, idempotency, and audit behavior. Test tool selection with at least one weaker target model when available.
 
+Run verification in this order to keep feedback fast:
+
+1. compile the changed module;
+2. run the focused OAuth/MCP vertical-slice test;
+3. run the module test suite;
+4. start one managed server process;
+5. run metadata and negative-auth probes;
+6. run the real target-client smoke test.
+
 ## Completion Report
 
 Report:
 
 - transport and architecture selected, including why;
+- whether the authorization layer is existing, managed, framework-provided, or prototype-only;
 - HTTP resource URI, issuer, scopes, and registration mode when applicable;
 - stdio command contract and credential source when applicable;
 - supported MCP revisions;
@@ -156,3 +204,5 @@ Report:
 - deferred compatibility risks.
 
 Do not report completion from discovery alone. HTTP requires a protected tool call and a negative authorization case; stdio requires a real subprocess tool call, protocol-only `stdout`, clean shutdown, and a denied local or product permission case.
+Do not call a custom OAuth facade production-ready merely because login and one
+tool call succeed.

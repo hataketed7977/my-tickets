@@ -16,6 +16,23 @@ Test:
 
 For HTTP also test canonical resource URI construction, audience validation, and scope parsing.
 
+### HTTP Fixed Gate Order
+
+Keep failures attributable to one layer:
+
+1. compile the selected SDK and security dependencies;
+2. test protected-resource metadata and the anonymous `401` challenge;
+3. use a test-only signed token or disposable issuer to prove token validation,
+   MCP initialization, tool listing, and one tool call;
+4. integrate authorization-server discovery, PKCE, resource binding, and code
+   exchange;
+5. integrate the existing login identity;
+6. run the exact Doubao client and model smoke test.
+
+Do not start browser OAuth debugging before the protected tool call works with
+a test fixture. Do not start target-client debugging before the complete OAuth
+integration test works without that client.
+
 ### stdio Process Contract
 
 Launch the real server command as a subprocess and assert:
@@ -46,6 +63,33 @@ Assert exact status, headers, content type, and JSON:
 | Wrong protocol version | defined compatibility error |
 | Oversized body | `413` or configured rejection |
 | Valid protected request | MCP response |
+
+### Streamable HTTP Compatibility
+
+Derive the test sequence from the installed SDK and negotiated MCP revision.
+For stateful `2025-06-18` implementations:
+
+1. POST `initialize` with both `application/json` and `text/event-stream` in
+   `Accept`;
+2. capture `Mcp-Session-Id`;
+3. POST `notifications/initialized` with that session ID;
+4. POST `tools/list`;
+5. POST one `tools/call`.
+
+Do not use a direct `tools/list` request as the positive health check for a
+stateful server. It proves neither initialization nor session propagation.
+
+Assert response framing as well as status:
+
+- initialization may return `application/json`;
+- tool responses may return `text/event-stream`;
+- parse the SSE `data:` field instead of treating the whole body as JSON;
+- decode response bytes as UTF-8 before asserting localized text;
+- verify the explicit MCP tool name, not the Java or TypeScript method name.
+
+For stateless `2026-07-28`, do not require a legacy session header merely
+because an older recipe used one. Keep one test case per supported revision
+and pin the SDK client version used by each case.
 
 ### HTTP Token Validation
 
