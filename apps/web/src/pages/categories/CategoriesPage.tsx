@@ -9,8 +9,8 @@ import { FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 
 import { categoriesApi } from '@/api';
-import { PageError, PageLoading } from '@/components/work-orders/AsyncState';
-import { PageHeader } from '@/components/work-orders/PageHeader';
+import { PageError, PageLoading } from '@/components/tickets/AsyncState';
+import { PageHeader } from '@/components/tickets/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,7 +62,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { getErrorMessage, useAsyncData } from '@/hooks/useAsyncData';
+import { useCategories } from '@/hooks/useCategories';
+import { getErrorMessage } from '@/lib/errors';
 import type { IssueCategoryItem } from '@/types/api';
 
 export default function CategoriesPage() {
@@ -74,12 +75,7 @@ export default function CategoriesPage() {
     useState<IssueCategoryItem | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<boolean>(false);
-  const {
-    data: categories,
-    error,
-    loading,
-    refresh,
-  } = useAsyncData<IssueCategoryItem[]>(categoriesApi.listCategories, []);
+  const { categories, error, loading, refresh } = useCategories();
 
   const openCreateDialog = (): void => {
     setEditing(null);

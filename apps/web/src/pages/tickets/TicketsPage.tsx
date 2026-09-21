@@ -2,12 +2,11 @@ import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, SearchIcon } from 'lucide-
 import { FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { categoriesApi, ticketsApi } from '@/api';
-import { PageError, PageLoading } from '@/components/work-orders/AsyncState';
-import { PageHeader } from '@/components/work-orders/PageHeader';
-import { TicketCreateDialog } from '@/components/work-orders/TicketCreateDialog';
-import { TicketDetailsSheet } from '@/components/work-orders/TicketDetailsSheet';
-import { TicketTable } from '@/components/work-orders/TicketTable';
+import { PageError, PageLoading } from '@/components/tickets/AsyncState';
+import { PageHeader } from '@/components/tickets/PageHeader';
+import { TicketCreateDialog } from '@/components/tickets/TicketCreateDialog';
+import { TicketDetailsSheet } from '@/components/tickets/TicketDetailsSheet';
+import { TicketTable } from '@/components/tickets/TicketTable';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import {
@@ -24,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAsyncData } from '@/hooks/useAsyncData';
+import { useCategories } from '@/hooks/useCategories';
+import { useTickets } from '@/hooks/useTickets';
 import type {
   IssueCategoryItem,
   TicketItem,
@@ -32,11 +32,6 @@ import type {
   TicketPriority,
   TicketStatus,
 } from '@/types/api';
-
-interface TicketsPageData {
-  tickets: TicketListResponse;
-  categories: IssueCategoryItem[];
-}
 
 export default function TicketsPage({
   initialCreateOpen = false,
@@ -56,34 +51,31 @@ export default function TicketsPage({
   const [page, setPage] = useState<number>(1);
 
   const {
-    data,
-    error,
-    loading,
-    refresh,
-  } = useAsyncData<TicketsPageData>(
-    async (): Promise<TicketsPageData> => {
-      const [tickets, categories]: [
-        TicketListResponse,
-        IssueCategoryItem[],
-      ] = await Promise.all([
-        ticketsApi.listTickets({
-          page,
-          pageSize: 15,
-          search: search || undefined,
-          status:
-            status === 'all' ? undefined : (status as TicketStatus),
-          priority:
-            priority === 'all'
-              ? undefined
-              : (priority as TicketPriority),
-          categoryId: categoryId === 'all' ? undefined : categoryId,
-        }),
-        categoriesApi.listCategories(),
-      ]);
-      return { tickets, categories };
-    },
-    [page, search, status, priority, categoryId],
-  );
+    tickets: ticketData,
+    error: ticketsError,
+    loading: ticketsLoading,
+    refresh: refreshTickets,
+  } = useTickets({
+    page,
+    pageSize: 15,
+    search: search || undefined,
+    status: status === 'all' ? undefined : (status as TicketStatus),
+    priority:
+      priority === 'all' ? undefined : (priority as TicketPriority),
+    categoryId: categoryId === 'all' ? undefined : categoryId,
+  });
+  const {
+    categories,
+    error: categoriesError,
+    loading: categoriesLoading,
+    refresh: refreshCategories,
+  } = useCategories();
+
+  const loading = ticketsLoading || categoriesLoading;
+  const error = ticketsError ?? categoriesError;
+  const refreshPage = async (): Promise<void> => {
+    await Promise.all([refreshTickets(), refreshCategories()]);
+  };
 
   const handleSearch = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -91,10 +83,12 @@ export default function TicketsPage({
     setSearch(searchInput.trim());
   };
 
-  if (loading && !data) return <PageLoading />;
-  if (error && !data) return <PageError message={error} onRetry={refresh} />;
+  if (loading && (!ticketData || !categories)) return <PageLoading />;
+  if (error && (!ticketData || !categories)) {
+    return <PageError message={error} onRetry={refreshPage} />;
+  }
 
-  const tickets: TicketListResponse = data?.tickets ?? {
+  const tickets: TicketListResponse = ticketData ?? {
     items: [],
     total: 0,
     page: 1,
@@ -129,7 +123,7 @@ export default function TicketsPage({
 
   const handleDataChanged = async (): Promise<void> => {
     setPage(1);
-    await refresh();
+    await refreshTickets();
   };
 
   return (
@@ -215,7 +209,7 @@ export default function TicketsPage({
               }}
               options={[
                 ['all', '全部分类'],
-                ...(data?.categories ?? []).map(
+                ...(categories ?? []).map(
                   (category: IssueCategoryItem): [string, string] => [
                     category.id,
                     category.name,

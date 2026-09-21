@@ -36,7 +36,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { getErrorMessage } from '@/hooks/useAsyncData';
+import { getErrorMessage } from '@/lib/errors';
 import type {
   IssueCategoryItem,
   TicketItem,
