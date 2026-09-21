@@ -8,9 +8,9 @@ This is a vertical-slice recipe, not a recommendation to build a general
 authorization server. Prefer an existing or managed OAuth authorization
 server whenever it can issue audience-bound MCP access tokens.
 
-## Validated Version Matrix
+## Compatibility Evidence, Not Default
 
-The concrete repository slice that informed this recipe used:
+One validated repository slice used:
 
 | Component | Version or mode |
 | --- | --- |
@@ -20,12 +20,14 @@ The concrete repository slice that informed this recipe used:
 | MCP Java SDK | 0.16.0, transitively |
 | Transport | Streamable HTTP |
 | MCP revision exercised | `2025-06-18` |
-| Token mode | JWT bearer, HS256 for the local slice |
-| User identity | Existing Feishu-backed web session |
+| Token mode | JWT bearer, HS256 for a disposable local slice |
+| User identity | Existing external-login-backed web session |
 
-Do not infer support for a newer MCP revision from this matrix. Confirm the
-installed SDK and target Doubao surface before changing versions or removing
-session behavior.
+This matrix is historical compatibility evidence, not a dependency
+recommendation. Do not copy these versions into another repository. Inspect
+the target project's dependency management, select a mutually compatible
+Spring Boot and Spring AI release, inspect the resulting MCP SDK version, and
+test the MCP revision required by the target Doubao surface.
 
 ## Recommended Production Architecture
 
@@ -34,7 +36,7 @@ Use this stack unless repository evidence requires a different one:
 ```text
 Doubao or MCP client
   -> maintained OAuth authorization server
-       -> existing Feishu/OIDC login as upstream identity
+       -> existing OIDC or social login as upstream identity
        -> authorization code + PKCE S256
        -> MCP-audience access token
   -> Spring Security OAuth2 Resource Server
@@ -47,7 +49,8 @@ Select the authorization layer in this order:
 
 1. Use the product's existing standards-compliant OAuth/OIDC authorization
    server if it can issue an MCP-specific audience and scopes.
-2. Use a managed authorization server or gateway and federate Feishu login.
+2. Use a managed authorization server or gateway and federate the existing
+   login.
 3. If self-hosting is required, use Spring Authorization Server and bridge the
    existing authenticated user into Spring Security.
 4. Use custom `/authorize` and `/token` code only for a disposable prototype
@@ -63,21 +66,28 @@ MVC interceptor, add one authentication bridge that creates a trusted Spring
 Security `Authentication` for the authorization server. Do not reimplement the
 authorization-code protocol around that cookie.
 
-## Validated Prototype Slice
+## Non-Default Prototype Evidence
+
+Skip this section unless the user explicitly requests a disposable prototype
+or written acceptance criteria permit a custom authorization facade. Never
+infer prototype status from a repository or branch name, localhost, seed data,
+or workshop-like structure.
+
+One validated prototype used this flow:
 
 ```text
 MCP client
   -> GET /oauth/authorize + PKCE S256 + resource
   -> existing web session?
-       no  -> Feishu login -> callback -> resume /oauth/authorize
+       no  -> upstream login -> callback -> resume /oauth/authorize
        yes -> short-lived single-use authorization code
   -> POST /oauth/token + code_verifier
   <- MCP-audience JWT access token
   -> POST /mcp + Bearer token
   -> Spring Security resource server
   -> Spring AI Streamable HTTP transport
-  -> get_current_user
-  -> existing AuthService by verified JWT subject
+  -> first_read_tool
+  -> existing user service by verified JWT subject
 ```
 
 This slice proves identity continuity and MCP interoperability, but its custom
@@ -88,13 +98,13 @@ reference is implemented and reviewed.
 
 Keep four boundaries distinct:
 
-1. Feishu authenticates the person.
+1. The external identity provider authenticates the person.
 2. The OAuth authorization layer issues an MCP-specific token.
 3. Spring Security authenticates `/mcp`.
 4. Existing application services authorize and load business data.
 
-Never give the MCP client the web session cookie or reuse a Feishu token as
-the MCP access token.
+Never give the MCP client the web session cookie or reuse an upstream identity
+provider token as the MCP access token.
 
 ## Recommended Dependencies and Configuration
 
@@ -103,9 +113,19 @@ Resource server and MCP transport:
 ```groovy
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-implementation platform('org.springframework.ai:spring-ai-bom:1.1.0')
+implementation platform("org.springframework.ai:spring-ai-bom:$springAiVersion")
 implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
 ```
+
+Set `springAiVersion` through the repository's existing version catalog,
+dependency-management block, or build property. Resolve it from the target
+Spring Boot compatibility matrix; do not default new projects to the
+historical version above.
+
+Do not add Nimbus JOSE or another JWT library directly when the selected Spring
+Security starter already supplies the required implementation. Inspect the
+resolved dependency graph first and add a direct dependency only when
+application code intentionally owns that API.
 
 When this deployment must host the authorization server, add the framework
 starter instead of hand-writing OAuth endpoints:
@@ -118,7 +138,9 @@ Let the repository's Spring Boot dependency management select a compatible
 Spring Authorization Server version. Pin and test the resulting versions in
 CI rather than mixing arbitrary examples from other releases.
 
-Resource-server configuration:
+Illustrative resource-server configuration follows. Property names under
+`spring.ai.mcp` vary across Spring AI releases; verify them against the
+selected version's configuration metadata before editing:
 
 ```yaml
 spring:
@@ -159,19 +181,21 @@ distribution and rotation.
 ## Spring Authorization Server Defaults
 
 When self-hosting is necessary, pre-register the target client with exact
-redirect URIs and require PKCE:
+redirect URIs and require PKCE. The following example is for a public client
+that cannot keep a secret; use the target client's documented authentication
+method when it is confidential:
 
 ```java
 @Bean
-RegisteredClientRepository registeredClients() {
+RegisteredClientRepository registeredClients(McpClientProperties properties) {
     RegisteredClient doubao = RegisteredClient
             .withId(UUID.randomUUID().toString())
-            .clientId("doubao-mcp-client")
+            .clientId(properties.clientId())
             .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
             .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-            .redirectUri("https://client.example.com/oauth/callback")
+            .redirectUri(properties.redirectUri())
             .scope("openid")
-            .scope("tickets:read")
+            .scope(properties.readScope())
             .clientSettings(ClientSettings.builder()
                     .requireProofKey(true)
                     .requireAuthorizationConsent(true)
@@ -190,15 +214,27 @@ audience is the exact canonical MCP resource:
 ```java
 @Bean
 OAuth2TokenCustomizer<JwtEncodingContext> mcpAudience(
+        McpClientProperties properties,
         @Value("${app.mcp.resource}") String resource
 ) {
     return context -> {
-        if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
+        boolean isMcpAccessToken =
+                OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())
+                && properties.allowedClientIds().contains(
+                        context.getRegisteredClient().getClientId()
+                );
+        if (isMcpAccessToken) {
             context.getClaims().audience(List.of(resource));
         }
     };
 }
 ```
+
+This example assumes every configured client ID is dedicated to the canonical
+MCP resource. Do not add the MCP audience to every access token emitted by a
+shared authorization server. When one client can request multiple resources,
+use the authorization server's validated resource-indicator context instead
+of selecting the audience from client ID alone.
 
 Also configure a stable issuer, persistent signing keys with rotation, exact
 client metadata, and the registration mode supported by the target Doubao
@@ -209,8 +245,7 @@ binding.
 
 ## Keep MCP Security Separate
 
-Use an ordered filter chain for `/mcp` and leave existing web-session behavior
-on the other chain:
+Use an ordered filter chain for `/mcp`:
 
 ```java
 @Bean
@@ -225,20 +260,12 @@ SecurityFilterChain mcpSecurity(HttpSecurity http) throws Exception {
             .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
             .build();
 }
-
-@Bean
-@Order(Ordered.LOWEST_PRECEDENCE)
-SecurityFilterChain existingApplication(HttpSecurity http) throws Exception {
-    return http
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-            .build();
-}
 ```
 
-`permitAll` in the second chain is appropriate only when an existing
-interceptor or equivalent still protects the application's routes. Otherwise
-preserve the repository's current Spring Security rules.
+Do not add a catch-all `permitAll` chain as part of this recipe. Preserve and
+test the application's existing security chains. If the application has no
+Spring Security chain yet, add one from its actual access policy and default
+to authenticated or denied routes rather than globally permitting requests.
 
 Use a standard `JwtDecoder` with independent issuer, audience, timestamp, and
 algorithm validation. For an external issuer prefer
@@ -277,22 +304,25 @@ Requirements:
 - consume the code atomically in the same transaction as validation;
 - reject replay, mismatch, expiry, and missing verifier as `invalid_grant`.
 
-When the existing Feishu session is absent, save a bounded same-origin
-authorization transaction and resume it after the Feishu callback. Prefer a
-server-side transaction ID over storing a raw authorization URL in a cookie.
+When the existing login session is absent, save a bounded same-origin
+authorization transaction and resume it after the upstream login callback.
+Prefer a server-side transaction ID over storing a raw authorization URL in a
+cookie.
 
 ## Register Tools Explicitly
 
 Spring AI derives the tool name from the Java method unless `name` is set.
-Always set the MCP identifier explicitly:
+Always set the MCP identifier explicitly. This example uses
+`get_current_user`; replace it with the smallest useful read operation already
+present in the target product:
 
 ```java
 @Component
 final class IdentityTools {
-    private final AuthService authService;
+    private final UserDirectory users;
 
-    IdentityTools(AuthService authService) {
-        this.authService = authService;
+    IdentityTools(UserDirectory users) {
+        this.users = users;
     }
 
     @Tool(
@@ -305,7 +335,7 @@ final class IdentityTools {
         if (!(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new IllegalStateException("Unauthenticated request");
         }
-        return UserResult.from(authService.getUserById(jwt.getSubject()));
+        return UserResult.from(users.getById(jwt.getSubject()));
     }
 }
 
@@ -320,7 +350,8 @@ class McpToolRegistration {
 }
 ```
 
-For Spring AI 1.1.0 the provider import is:
+For the historical Spring AI 1.1.0 compatibility profile, the provider import
+is:
 
 ```java
 org.springframework.ai.tool.method.MethodToolCallbackProvider
@@ -361,6 +392,8 @@ client registration mode
 Add only the MCP transport and resource-server dependencies, then compile.
 Resolve package or property differences by inspecting the installed artifacts
 or the matching official example once. Do not try APIs from multiple versions.
+Compile immediately at this point, before adding database tables, OAuth
+controllers, tools, or broad configuration changes.
 
 ### Gate 2: Protected transport with a test token
 
@@ -388,10 +421,10 @@ Connect the maintained authorization server and prove:
 
 ### Gate 4: Existing-login bridge
 
-Reuse Feishu only as the upstream user authentication:
+Reuse the existing identity provider only as upstream user authentication:
 
 1. start authorization while signed out;
-2. complete Feishu login;
+2. complete the existing login;
 3. resume the same bounded authorization transaction;
 4. verify the authorization server sees the authenticated application user;
 5. call the MCP tool and verify JWT subject maps to that user.
@@ -405,10 +438,15 @@ tool allowlist, token refresh, and negative authorization behavior.
 At each gate run the focused test first. Run the full module suite only after
 the focused gate is green.
 
-## Real Streamable HTTP Test Sequence
+## Compatibility Example: Stateful `2025-06-18`
 
-For the stateful `2025-06-18` behavior exercised by Spring AI 1.1.0, do not
-start with `tools/list`. The minimum sequence is:
+Use this section only when the frozen compatibility matrix selects the
+historical Spring AI 1.1.0 / MCP SDK 0.16.0 profile or the target client
+requires equivalent session behavior. For newer stateless revisions, follow
+the installed SDK test client and do not force `Mcp-Session-Id`.
+
+For the stateful compatibility profile, do not start with `tools/list`. The
+minimum sequence is:
 
 1. `initialize`;
 2. read `Mcp-Session-Id` from the response;
@@ -479,9 +517,9 @@ seed application user and valid web session
 -> exchange code with verifier
 -> initialize MCP session
 -> send initialized notification
--> list get_current_user
--> call get_current_user
--> assert returned user matches JWT subject
+-> list the configured first read tool
+-> call the configured first read tool
+-> assert the result is authorized for the verified JWT subject
 ```
 
 Add negative cases before broad manual testing:
@@ -496,11 +534,13 @@ Add negative cases before broad manual testing:
 Run focused tests first:
 
 ```bash
-./gradlew test --tests McpOAuthFlowTest
+./gradlew test --tests '*Mcp*IntegrationTest'
 ./gradlew test
 ```
 
-Only then start a real server for a smoke test.
+Complete the planned focused authorization, resume-flow, and negative cases
+before running the full module suite. Run the full suite once, then start a
+real server for a smoke test.
 
 ## Repeated Failure Modes
 
@@ -513,8 +553,10 @@ Only then start a real server for a smoke test.
 | `tools/list` returns `400` before dispatch | MCP session was never initialized | Run initialize and initialized notification first |
 | JSON assertion fails on tools response | Response is SSE, not plain JSON | Parse the SSE `data:` line |
 | Chinese or other text is mojibake | Test decoded response with default charset | Decode response as UTF-8 explicitly |
-| Tool appears as `getCurrentUser` | `@Tool` defaulted to Java method name | Set `name = "get_current_user"` |
+| Tool appears in camelCase | `@Tool` defaulted to the Java method name | Set an explicit snake_case `name` |
 | OAuth errors become generic `500` | Global exception advice wins | Give OAuth advice higher precedence and test RFC error JSON |
+| Application fails to start after a YAML edit | A top-level key such as `spring` was duplicated | Merge into the existing mapping and run a context-load test immediately |
+| Database rejects a generated transaction ID | Encoded identifier is longer than its column | Derive schema length from the encoded format and test the maximum value |
 | Curl reports connection refused after a prior successful boot | Detached dev server was terminated or stale processes conflict | Use one managed process, wait for readiness, and stop it explicitly |
 | IDE reports missing Spring classes but Gradle compiles | Dependency index is stale | Treat clean Gradle compile/test as source of truth, then refresh IDE |
 

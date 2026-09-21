@@ -16,6 +16,7 @@ Do not:
 - replace the product's existing login or authorization model;
 - build a new identity provider when a maintained OAuth authorization server can be used;
 - hand-write OAuth authorization or token endpoints for production;
+- infer that production safeguards may be skipped from a branch name, repository name, localhost URL, sample data, or workshop-like structure;
 - pass an upstream or downstream API token through as the MCP access token;
 - add role systems, admin concepts, or broad scopes not already required by the product;
 - expose every internal API as a tool;
@@ -51,6 +52,7 @@ Read only the files needed for the current phase:
 5. Read [doubao-integration.md](references/doubao-integration.md) for the target Doubao surface.
 6. Read [verification.md](references/verification.md) before writing tests or declaring completion.
 7. Read [spring-ai-streamable-http-oauth.md](references/spring-ai-streamable-http-oauth.md) when the target is Spring Boot/Spring AI or when a proven OAuth-to-tool vertical slice is useful.
+8. Read [feishu-identity-bridge.md](references/feishu-identity-bridge.md) when the existing identity source is Feishu/Lark or the user asks to reuse Feishu login.
 
 Do not load all references at once.
 
@@ -71,6 +73,11 @@ Inspect the repository before proposing changes. Record:
 
 Ask only for facts that cannot be discovered and that block a secure implementation. Never request secrets in chat or commit them.
 
+Stop discovery when the transport, framework and versions, authentication
+boundary, internal principal, first tool, and test command are known. Do not
+inspect git history or reopen the same files unless the current tree conflicts
+with the task or a concrete failure requires it.
+
 ### 1.5 Reuse a Proven Recipe
 
 Before researching framework APIs from scratch:
@@ -87,6 +94,10 @@ Timebox manual HTTP probing until the focused test passes. Use a managed foregro
 Do not branch into multiple speculative implementations. When an API is
 uncertain, inspect the installed dependency or its official example once,
 record the result in the compatibility matrix, and continue with that version.
+
+Keep the implementation plan to 3-5 behavior-complete gates. Each gate must
+end in an observable test. Do not create one task per file, class, dependency,
+or configuration edit.
 
 ### 2. Select the Transport
 
@@ -123,6 +134,9 @@ For HTTP, use this order:
 4. A custom authorization facade only for an explicitly disposable prototype or separately reviewed compatibility exception.
 
 Keep the MCP transport adapter, token validation, business service, and downstream credential handling separate.
+
+Require explicit user instruction or written acceptance criteria before
+selecting option 4. Never infer prototype status from repository metadata.
 
 Stop and report a blocker if the proposed design requires accepting a token issued to another resource, wildcard redirect URIs, plaintext production HTTP, or secrets in source control.
 
@@ -183,10 +197,11 @@ Run verification in this order to keep feedback fast:
 
 1. compile the changed module;
 2. run the focused OAuth/MCP vertical-slice test;
-3. run the module test suite;
-4. start one managed server process;
-5. run metadata and negative-auth probes;
-6. run the real target-client smoke test.
+3. finish all planned focused negative and resume-flow cases;
+4. run the module test suite once;
+5. start one managed server process;
+6. run metadata and negative-auth probes;
+7. run the real target-client smoke test.
 
 ## Completion Report
 

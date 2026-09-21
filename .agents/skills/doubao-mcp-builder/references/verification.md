@@ -33,6 +33,15 @@ Do not start browser OAuth debugging before the protected tool call works with
 a test fixture. Do not start target-client debugging before the complete OAuth
 integration test works without that client.
 
+Use this execution cadence:
+
+- run the existing suite once as a baseline when the branch is not already
+  known green;
+- run only the focused gate tests while implementing;
+- finish all planned focused cases before running the full suite;
+- run the full suite once and the production build once at the end;
+- rerun either only when code changes after that gate.
+
 ### stdio Process Contract
 
 Launch the real server command as a subprocess and assert:
