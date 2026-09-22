@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import type { TicketItem } from '@/types/api';
 
-import { TicketPriorityBadge, TicketStatusBadge } from './TicketBadges';
+import { TicketPriorityBadge, TicketStatusBadge } from '@components/tickets/TicketBadges';
 
 interface TicketTableProps {
   tickets: TicketItem[];

@@ -1,6 +1,6 @@
 import type { AppUser } from '@/types/api';
 
-import { request } from './request';
+import { request } from '@api/request';
 
 export function listUsers(): Promise<AppUser[]> {
   return request<AppUser[]>(

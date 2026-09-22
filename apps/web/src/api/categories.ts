@@ -4,7 +4,7 @@ import type {
   UpdateIssueCategoryRequest,
 } from '@/types/api';
 
-import { request } from './request';
+import { request } from '@api/request';
 
 const CACHE_TTL_MS = 30_000;
 

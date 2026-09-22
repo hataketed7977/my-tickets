@@ -6,7 +6,7 @@ import type {
   UpdateTicketRequest,
 } from '@/types/api';
 
-import { request } from './request';
+import { request } from '@api/request';
 
 export function listTickets(
   query: TicketListQuery,

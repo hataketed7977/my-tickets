@@ -62,7 +62,7 @@ import {
   STATUS_LABELS,
   TicketPriorityBadge,
   TicketStatusBadge,
-} from './TicketBadges';
+} from '@components/tickets/TicketBadges';
 
 interface TicketDetailsData {
   ticket: TicketItem;

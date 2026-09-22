@@ -21,6 +21,18 @@ module.exports = tseslint.config(
         'error',
         { argsIgnorePattern: '^_' },
       ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['./**', '../**'],
+              message:
+                '模块引用必须使用路径别名，禁止相对路径。请使用 @/、@api/、@components/ 等别名。',
+            },
+          ],
+        },
+      ],
     },
   },
 );

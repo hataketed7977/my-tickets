@@ -1,6 +1,6 @@
 import type { AppUser, AuthConfig } from '@/types/api';
 
-import { request } from './request';
+import { request } from '@api/request';
 
 export function getConfig(): Promise<AuthConfig> {
   return request<AuthConfig>(

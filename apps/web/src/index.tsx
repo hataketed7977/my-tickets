@@ -3,10 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 
-import { AuthProvider, useAuth } from './auth/AuthContext';
-import RoutesComponent from './app';
-import LoginPage from './pages/auth/LoginPage';
-import './index.css';
+import { AuthProvider, useAuth } from '@auth/AuthContext';
+import RoutesComponent from '@/app';
+import LoginPage from '@pages/auth/LoginPage';
+import '@/index.css';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { Spinner } from '@/components/ui/spinner';

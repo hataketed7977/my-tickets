@@ -1,9 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import Layout from './components/Layout';
-import NotFound from './pages/NotFound/NotFound';
-import TicketsPage from './pages/tickets/TicketsPage';
-import CategoriesPage from './pages/categories/CategoriesPage';
+import Layout from '@components/Layout';
+import NotFound from '@pages/NotFound/NotFound';
+import TicketsPage from '@pages/tickets/TicketsPage';
+import CategoriesPage from '@pages/categories/CategoriesPage';
 
 const RoutesComponent = () => {
   return (
