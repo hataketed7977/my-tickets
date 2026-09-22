@@ -284,46 +284,37 @@ earlier layer.
 If the exact target client is unavailable, leave Gate 5 pending and report the
 server-side integration as complete but client compatibility as unverified.
 
-### Default HTTP OAuth Delivery Split
+#### Independent HTTP delivery profiles
 
-When a request includes both a new Streamable HTTP MCP service and OAuth,
-create two delivery tasks even if the user describes one final outcome.
+When the prompt explicitly selects one profile, implement only that profile.
+Use the Skill and its references for implementation detail; do not require the
+prompt to repeat the full checklist.
 
-**Task A: HTTPS MCP Foundation**
+**HTTPS MCP with existing authentication**
 
-- complete Gates 1 and 2;
-- freeze the external HTTPS MCP URL, TLS termination point, certificate source,
-  trust distribution, and internal listener protocol;
-- prove the required stateless or stateful transport through real HTTPS;
-- use only a test fixture or disposable issuer to prove bearer validation;
-- complete initialize, tool listing, and one read-only tool call;
-- do not add authorization-server, DCR, consent, browser-login, or
-  identity-bridge code.
+- deliver a complete HTTPS Streamable HTTP MCP service;
+- reuse an existing non-browser bearer or service authentication mechanism;
+- complete transport, authentication, one read-only tool, negative
+  authorization, and target-runtime verification;
+- do not add an OAuth authorization server, DCR, consent, browser login, PKCE,
+  or refresh-token behavior.
 
-Task A must not leave an anonymously accessible public MCP endpoint. Keep any
-test credential path inside tests or an explicitly local, non-production
-profile. Report the foundation as transport-ready, not OAuth-ready.
+This profile is independently complete. Do not describe it as a foundation for
+another task or assume an OAuth phase will follow.
 
-Stop after Task A and report its evidence. Do not begin Task B in the same run
-unless the user explicitly requires both delivery tasks to be completed
-without an intermediate review.
+**HTTPS MCP with OAuth 2.1**
 
-**Task B: OAuth 2.1 and Identity Integration**
+- deliver the complete HTTPS MCP transport and OAuth integration from the
+  repository state found at the start;
+- complete all five HTTP MCP gates, including DCR and the existing-login bridge
+  when required;
+- do not assume the existing-authentication profile was implemented first;
+- reuse compatible existing code when present, but verify every required gate.
 
-- complete Gates 3 through 5;
-- add protected-resource and authorization-server discovery;
-- add the selected client-registration mode, PKCE, token, refresh, resource,
-  audience, and scope behavior;
-- bridge the existing login identity and resume the authorization request;
-- call the MCP tool with the issued token;
-- run the exact target-client smoke test.
+This profile is independently complete. Do not automatically execute or depend
+on the other profile.
 
-Task B must reuse the exact HTTPS URL and TLS boundary frozen by Task A. Do not
-change scheme, host, port, or resource identity while debugging OAuth.
-
-For Task A, load only the transport implementation, TLS, and verification
-references required by the selected SDK. For Task B, add protocol,
-authorization-server, identity-source, and target-client references as needed.
+#### stdio delivery gates
 
 For stdio:
 
