@@ -91,10 +91,15 @@ stateful server. It proves neither initialization nor session propagation.
 Assert response framing as well as status:
 
 - initialization may return `application/json`;
+- a JSON-RPC notification such as `notifications/initialized` has no response
+  object and may return HTTP `202 Accepted` with an empty body;
 - tool responses may return `text/event-stream`;
 - parse the SSE `data:` field instead of treating the whole body as JSON;
 - decode response bytes as UTF-8 before asserting localized text;
 - verify the explicit MCP tool name, not the Java or TypeScript method name.
+
+Assert status and body semantics per MCP method. Do not make every request
+accept both `200` and `202` merely to accommodate one notification.
 
 For stateless `2026-07-28`, do not require a legacy session header merely
 because an older recipe used one. Keep one test case per supported revision
@@ -131,6 +136,13 @@ In a disposable authorization-server environment, test:
 - `iss` mismatch rejection;
 - authorization-code replay rejection;
 - refresh rotation or documented refresh behavior.
+
+Construct authorization endpoint GET requests with a standards-aware URI
+builder so OAuth parameters exist in the actual query string. Some test-client
+helpers add parameters to a synthetic parameter map without populating the raw
+query string used by authorization-server validators. On the first unexpected
+OAuth `400`, capture the method, raw query string, parsed parameters, and
+registered redirect URI before changing production security code.
 
 Do not run browser OAuth tests against production.
 

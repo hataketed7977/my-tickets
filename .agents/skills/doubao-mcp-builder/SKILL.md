@@ -60,7 +60,7 @@ Read only the files needed for the current phase:
 4. Read [architecture-and-implementation.md](references/architecture-and-implementation.md) before editing code.
 5. Read [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md) before defining tools.
 6. Read [verification.md](references/verification.md) before writing tests or declaring completion.
-7. Read [spring-ai-streamable-http-oauth.md](references/spring-ai-streamable-http-oauth.md) when the target is Spring Boot/Spring AI or when a proven OAuth-to-tool vertical slice is useful.
+7. Read [spring-ai-streamable-http-oauth.md](references/spring-ai-streamable-http-oauth.md) only when the target is Spring Boot or Spring AI.
 8. Read [feishu-identity-bridge.md](references/feishu-identity-bridge.md) when the existing identity source is Feishu/Lark or the user asks to reuse Feishu login.
 9. Read [tls-and-public-url.md](references/tls-and-public-url.md) for Streamable HTTP when certificate trust, browser login, reverse proxies, or public URL deployment are involved.
 
@@ -99,18 +99,56 @@ Before researching framework APIs from scratch:
 3. verify the exact target client's transport, TLS, registration, credential, and MCP revision requirements;
 4. select one row from Default Recommendation;
 5. freeze an SDK, framework, MCP revision, issuer, resource, registration mode, and target-client compatibility matrix;
-6. compile a minimal dependency and transport spike;
-7. write one focused end-to-end test covering authentication, initialization, tool listing, and one tool call.
+6. prove from the resolved dependency graph and installed API that the selected
+   transport supports every required matrix row;
+7. compile a minimal dependency and transport spike;
+8. write the first focused test for the current gate only.
 
 Timebox manual HTTP probing until the focused test passes. Use a managed foreground or tool-owned server process for smoke tests; do not repeatedly launch detached processes and infer protocol failures from stale or terminated servers.
+
+The compatibility matrix is a hard gate before dependency or MCP code edits.
+Never choose a dependency version because it appears in a historical example.
+If the current framework adapter cannot be proven compatible, select an
+official MCP SDK that satisfies the matrix. If no supported implementation can
+be proven, stop and report the compatibility blocker instead of adapting an
+older transport speculatively.
 
 Do not branch into multiple speculative implementations. When an API is
 uncertain, inspect the installed dependency or its official example once,
 record the result in the compatibility matrix, and continue with that version.
+Inspect only the selected version; do not scan every cached release or compare
+unselected APIs after the matrix is frozen.
 
 Keep the implementation plan to 3-5 behavior-complete gates. Each gate must
 end in an observable test. Do not create one task per file, class, dependency,
-or configuration edit.
+or configuration edit. Rewrite the plan before coding if it is organized by
+components or contains more than five implementation gates.
+
+### 1.6 Bound Execution
+
+Inspect repository start scripts before running them. Treat commands that own
+a server, file watcher, event loop, foreground supervisor, or unbounded loop
+as long-running processes, not commands expected to complete.
+
+- Do not start the full application stack during discovery or compilation.
+- Start only the service required by the current gate after its compile-time
+  and isolated checks pass.
+- Give startup and readiness checks explicit deadlines. Once readiness passes,
+  continue verification without waiting for the server command to exit.
+- Keep the process in a managed tool session and stop it when the gate ends.
+- Do not run overlapping build or test commands for the same module.
+- For a failing gate, record the failure signature, suspected layer, current
+  evidence, and one discriminating check before editing code.
+- Use one hypothesis, one bounded probe or change, and one focused rerun.
+  Confirm that a test fixture or client did not construct an invalid request
+  before changing production protocol or security code.
+- If the same failure signature survives two attempts, stop retrying. Capture
+  the exact request, response, and resolved dependency version; form a new
+  evidence-based hypothesis before another run.
+- After three rejected hypotheses or ten diagnostic actions without a new
+  observable, stop mutating code and report the gate as blocked with evidence.
+- If a gate remains red after its timebox, report the failing gate and evidence
+  instead of continuing into later gates.
 
 ### 2. Select the Transport
 
@@ -161,15 +199,17 @@ listener and certificate identity.
 
 ### 5. Implement in Vertical Slices
 
-Implement one read-only tool end to end first. For HTTP:
+Implement one read-only tool first. For HTTP, use these gates without adding
+code from a later gate before the current gate is green:
 
-1. protected resource metadata;
-2. unauthenticated `401` challenge;
-3. authorization-server discovery compatibility;
-4. bearer validation with issuer, audience, expiry, and scope checks;
-5. Streamable HTTP MCP endpoint;
-6. one tool calling an existing business service;
-7. integration tests.
+1. compatibility matrix and dependency/transport compile;
+2. protected-resource metadata, anonymous `401`, bearer validation, MCP
+   initialization, tool listing, and one tool call using a test-only token or
+   disposable issuer;
+3. authorization-server discovery, client registration, PKCE, resource
+   binding, code exchange, and negative cases;
+4. existing-login identity bridge and signed-out resume flow;
+5. exact target-client smoke test.
 
 For stdio:
 
@@ -215,18 +255,21 @@ For write tools, test denial, confirmation, idempotency, and audit behavior. Tes
 Run verification in this order to keep feedback fast:
 
 1. compile the changed module;
-2. run the focused OAuth/MCP vertical-slice test;
-3. finish all planned focused negative and resume-flow cases;
-4. run the module test suite once;
-5. start one managed server process;
-6. run metadata and negative-auth probes;
-7. for browser-login bridges, verify that Web and API use the same scheme and
+2. run the protected MCP transport and tool test with a test-only token or
+   disposable issuer;
+3. run focused authorization-server tests;
+4. run focused existing-login and resume-flow tests;
+5. finish the planned negative cases;
+6. run the module test suite once;
+7. start one managed server process;
+8. run metadata and negative-auth probes;
+9. for browser-login bridges, verify that Web and API use the same scheme and
    that credentialed CORS and cookie attributes match the effective runtime
    configuration;
-8. run the TLS gate in
+10. run the TLS gate in
    [tls-and-public-url.md](references/tls-and-public-url.md) without trust
    bypasses;
-9. run the real target-client smoke test.
+11. run the real target-client smoke test.
 
 ## Completion Report
 
@@ -248,3 +291,6 @@ Report:
 Do not report completion from discovery alone. HTTP requires a protected tool call and a negative authorization case; stdio requires a real subprocess tool call, protocol-only `stdout`, clean shutdown, and a denied local or product permission case.
 Do not call a custom OAuth facade production-ready merely because login and one
 tool call succeed.
+If the exact target client was not exercised, report "server-side integration
+complete; target-client compatibility unverified" instead of declaring the
+integration complete.

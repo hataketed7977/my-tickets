@@ -10,27 +10,6 @@ This is a vertical-slice recipe, not a recommendation to build a general
 authorization server. Prefer an existing or managed OAuth authorization
 server whenever it can issue audience-bound MCP access tokens.
 
-## Compatibility Evidence, Not Default
-
-One validated repository slice used:
-
-| Component | Version or mode |
-| --- | --- |
-| Java | 21 |
-| Spring Boot | 3.4.5 |
-| Spring AI | 1.1.0 |
-| MCP Java SDK | 0.16.0, transitively |
-| Transport | Streamable HTTP |
-| MCP revision exercised | `2025-06-18` |
-| Token mode | JWT bearer, HS256 for a disposable local slice |
-| User identity | Existing external-login-backed web session |
-
-This matrix is historical compatibility evidence, not a dependency
-recommendation. Do not copy these versions into another repository. Inspect
-the target project's dependency management, select a mutually compatible
-Spring Boot and Spring AI release, inspect the resulting MCP SDK version, and
-test the MCP revision required by the target Doubao surface.
-
 ## Recommended Production Architecture
 
 Use this stack unless repository evidence requires a different one:
@@ -121,17 +100,18 @@ Use Spring AI when its resolved MCP Java SDK supports every requirement in the
 target-client matrix. Use the official MCP Java SDK directly when Spring AI
 lags the required MCP revision or transport state model.
 
-For the Doubao Work MCP OAuth 2.1 profile documented on 2026-09-22, verify all
-of these before selecting Spring AI:
+Before adding Spring AI, resolve its dependency graph and verify all of these
+against the installed transport API and the target Doubao documentation:
 
 - HTTPS MCP and authorization URLs, including local testing;
 - Dynamic Client Registration through an advertised `registration_endpoint`;
-- the current stateless Streamable HTTP transport;
+- the required stateful or stateless Streamable HTTP model;
 - the negotiated protocol revision and required headers.
 
-The validated Doubao Java demo used the official SDK directly with
-`HttpServletStatelessServerTransport`. Do not force an older stateful Spring AI
-adapter to emulate the current client protocol.
+Record the evidence before editing application code. A reference example,
+cached artifact, or successful compile does not prove target-client
+compatibility. If any row remains unknown, use the official SDK directly. Do
+not force a stateful adapter to emulate a stateless client protocol.
 
 ## Recommended Dependencies and Configuration
 
@@ -159,8 +139,7 @@ implementation "io.modelcontextprotocol.sdk:mcp:$mcpSdkVersion"
 
 Set `springAiVersion` through the repository's existing version catalog,
 dependency-management block, or build property. Resolve it from the target
-Spring Boot compatibility matrix; do not default new projects to the
-historical version above.
+Spring Boot compatibility matrix; do not copy a version from this reference.
 
 Do not add Nimbus JOSE or another JWT library directly when the selected Spring
 Security starter already supplies the required implementation. Inspect the
@@ -257,6 +236,20 @@ an existing implementation. Then let Spring Authorization Server own:
 
 Do not retain parallel custom code paths for those responsibilities after the
 framework flow passes its integration tests.
+
+Start the authorization-server filter chain from the selected release's
+official minimal configuration. In releases that expose
+`OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http)`, apply it
+before adding the identity bridge, entry point, CORS, or other narrow
+customizations. In later releases use the documented equivalent. Do not
+reconstruct the endpoint matcher and core authorization filters manually.
+
+When a custom session bridge writes directly to the `SecurityContext`, place
+it after `SecurityContextHolderFilter` so the repository load does not replace
+the authenticated context. Prefer a standard authentication mechanism when
+the existing session can be represented that way. Add one focused test proving
+that the bridge runs and the authorization endpoint observes the expected
+principal before testing redirects or code issuance.
 
 When self-hosting is necessary, pre-register the target client with exact
 redirect URIs and require PKCE. The following example is for a public client
@@ -458,12 +451,8 @@ class McpToolRegistration {
 }
 ```
 
-For the historical Spring AI 1.1.0 compatibility profile, the provider import
-is:
-
-```java
-org.springframework.ai.tool.method.MethodToolCallbackProvider
-```
+Resolve the provider import from the selected version's installed API or
+official documentation. Do not copy a package name from another release.
 
 Do not make a proxied `@Configuration` class `final`. Prefer a typed result
 record over returning a JSON string when the installed SDK serializes the
@@ -546,74 +535,6 @@ tool allowlist, token refresh, and negative authorization behavior.
 At each gate run the focused test first. Run the full module suite only after
 the focused gate is green.
 
-## Compatibility Example: Stateful `2025-06-18`
-
-Use this section only when the frozen compatibility matrix selects the
-historical Spring AI 1.1.0 / MCP SDK 0.16.0 profile or the target client
-requires equivalent session behavior. For newer stateless revisions, follow
-the installed SDK test client and do not force `Mcp-Session-Id`.
-
-For the stateful compatibility profile, do not start with `tools/list`. The
-minimum sequence is:
-
-1. `initialize`;
-2. read `Mcp-Session-Id` from the response;
-3. send `notifications/initialized` with that session ID;
-4. call `tools/list`;
-5. call `tools/call`.
-
-Every POST in this compatibility mode should send:
-
-```http
-Content-Type: application/json
-Accept: application/json, text/event-stream
-Authorization: Bearer <access-token>
-Mcp-Session-Id: <session-id-after-initialize>
-```
-
-Example initialization payload:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2025-06-18",
-    "capabilities": {},
-    "clientInfo": {
-      "name": "integration-test",
-      "version": "1.0.0"
-    }
-  }
-}
-```
-
-Spring AI may return `initialize` as JSON and later request responses as SSE:
-
-```text
-id:<session-id>
-event:message
-data:{"jsonrpc":"2.0","id":2,"result":{...}}
-```
-
-Parse the `data:` field as JSON. In MockMvc, decode response bytes explicitly
-as UTF-8 before asserting non-ASCII tool output:
-
-```java
-String body = result.getResponse()
-        .getContentAsString(StandardCharsets.UTF_8);
-
-JsonNode parseSseData(String body, ObjectMapper mapper) throws Exception {
-    for (String line : body.split("\n")) {
-        if (line.startsWith("data:")) {
-            return mapper.readTree(line.substring(5).trim());
-        }
-    }
-    throw new AssertionError("Missing SSE data field");
-}
-```
-
 ## Focused Vertical-Slice Test
 
 One integration test should prove this complete chain:
@@ -654,7 +575,7 @@ real server for a smoke test.
 
 | Symptom | Cause | Fast fix |
 | --- | --- | --- |
-| `MethodToolCallbackProvider` not found | Wrong package copied from another Spring AI version | Inspect the installed JAR; for 1.1.0 use `org.springframework.ai.tool.method` |
+| `MethodToolCallbackProvider` not found | Wrong package copied from another Spring AI version | Inspect the selected version's installed JAR or official API once |
 | Configuration class proxy error | Nested `@Configuration` declared `final` | Remove `final` or use `proxyBeanMethods = false` when valid |
 | Existing APIs suddenly return `403` | One broad Spring Security chain captured all routes | Use ordered matchers and preserve existing auth |
 | MCP POST returns `400` with invalid Accept headers | Client sent only JSON or only SSE | Send both `application/json, text/event-stream` |
