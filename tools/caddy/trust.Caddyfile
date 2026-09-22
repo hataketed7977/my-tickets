@@ -1,0 +1,9 @@
+{
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://localhost:{$CADDY_SETUP_PORT} {
+	tls internal
+	respond "Local HTTPS trust is ready."
+}
