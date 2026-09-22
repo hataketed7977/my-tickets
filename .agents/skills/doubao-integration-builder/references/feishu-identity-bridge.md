@@ -49,7 +49,7 @@ Keep these identities and credentials separate:
 
 ## Evidence Pass
 
-Inspect the repository before designing the bridge:
+Inspect only the existing login boundary before designing the bridge:
 
 ```bash
 rg -n "feishu|lark|open_id|union_id|user_id|user_access_token" .
@@ -75,6 +75,9 @@ Logout and session revocation behavior:
 
 Use the existing login and user repository when they already satisfy these
 requirements. Do not create a second Feishu integration solely for MCP.
+When login, callback, user mapping, and session behavior already have tests,
+treat them as established behavior. Do not reimplement or broadly retest the
+provider integration merely because an MCP identity bridge is being added.
 
 ## Two Independent Transactions
 
@@ -235,47 +238,44 @@ Do not log:
 - session cookie values;
 - raw user-info responses.
 
-## Fixed Implementation Order
+## Bridge Implementation
 
-Use these gates to avoid debugging identity, OAuth, and MCP simultaneously:
+When the product already has working Feishu login:
 
-1. Map an existing authenticated application session to an internal user.
-2. Test the MCP resource server and one tool with a test-only MCP token.
-3. Integrate a maintained MCP authorization server using the internal
-   principal.
-4. Add the Feishu login transaction and resume behavior.
-5. Test the complete signed-out browser flow.
-6. Connect the exact Doubao surface only after the server-side flow passes.
+1. resolve the current application session through the existing login service;
+2. map the resolved internal user to the authorization server's trusted
+   principal type;
+3. insert the bridge at the framework-defined point before the authorization
+   endpoint consumes authentication;
+4. preserve and resume the original authorization request when login is
+   required;
+5. leave provider exchange, profile mapping, session persistence, logout, and
+   existing callback behavior unchanged unless a focused bridge test proves a
+   concrete incompatibility.
 
-If the product already has working Feishu login, begin at step 1 and reuse it.
-Do not rewrite provider calls before proving a concrete incompatibility.
+Do not replay completed MCP transport or authorization-server work while adding
+the bridge. Do not connect a product client as part of bridge implementation
+unless client integration is explicitly in scope.
 
-## Required Tests
+## Focused Bridge Tests
 
-Identity and session:
+Select tests for behavior changed by the bridge:
 
-- an existing session resolves the expected internal user;
-- a new Feishu identity creates one binding and one internal user;
-- repeated login updates profile data without changing the internal user ID;
-- cross-tenant or cross-application identifiers do not collide;
-- expired and revoked sessions are rejected;
-- logout revokes the intended sessions.
-
-Transaction safety:
-
-- missing, mismatched, expired, and replayed Feishu state are rejected;
-- two concurrent login attempts remain bound to their own MCP transactions;
-- a callback cannot supply an arbitrary return URL;
-- provider denial returns a safe application error;
-- authorization codes and tokens do not appear in logs or responses.
-
-End to end:
-
-- a signed-out MCP authorization redirects through Feishu and resumes;
+- an existing valid application session becomes the expected internal
+  authorization principal;
+- an absent, expired, or revoked session does not authenticate;
+- a signed-out authorization request enters the existing login path and resumes
+  the same bounded authorization transaction;
 - the resulting MCP token subject equals the mapped internal user ID;
-- the MCP token audience is the canonical resource;
-- insufficient MCP scope is rejected even when Feishu login succeeded;
-- a Feishu token is rejected at the MCP resource endpoint.
+- a Feishu access token is rejected at the MCP resource endpoint.
+
+Use simulated provider responses or an existing application session fixture.
+Do not call the real Feishu service or manually inspect session tables for
+routine bridge verification.
+
+Only when the task changes provider login or identity mapping itself, add the
+relevant provider-level tests for state, callback, account binding, profile
+updates, tenant isolation, and logout.
 
 ## Common Mistakes
 
@@ -293,10 +293,11 @@ End to end:
 ## Freshness and Sources
 
 Provider endpoints, token request formats, scopes, and identity-field semantics
-change independently of MCP. Before implementing or changing provider calls,
-check the current official documentation for the selected Feishu or Lark
-application type. Record the verification date and do not copy an endpoint
-from this repository merely because it worked for an earlier API generation.
+change independently of MCP. Check current official documentation only when
+implementing or changing provider calls. A bridge that reuses an established
+provider adapter should not research provider APIs again. When provider code
+does change, record the verification date and do not copy an endpoint merely
+because it worked for an earlier API generation.
 
 Primary sources:
 

@@ -2,6 +2,25 @@
 
 Use a RED-GREEN-REFACTOR loop for each vertical slice. Add a failing focused test, implement the smallest behavior, then refactor while keeping the focused test green.
 
+## Evidence Ladder
+
+Use the lowest level that proves the requested scope:
+
+1. compile or static check;
+2. focused unit, embedded-server, or subprocess test;
+3. affected module suite and build;
+4. managed runtime probe;
+5. real target-client end to end.
+
+Levels 4 and 5 are not routine implementation checks. Use a managed runtime
+only when the task changes startup, routing, TLS, public metadata, browser
+origin behavior, or another boundary an automated test cannot prove. Use a real
+target client only when client integration is the deliverable or during final
+release validation.
+
+Do not repeat a green lower level unless later edits affect it. Never use the
+full flow as the diagnostic loop for a lower-layer failure.
+
 ## Test Layers
 
 ### Unit
@@ -16,7 +35,7 @@ Test:
 
 For HTTP also test canonical resource URI construction, audience validation, and scope parsing.
 
-### HTTP Fixed Gate Order
+### HTTP Capability Order
 
 Keep failures attributable to one layer:
 
@@ -29,6 +48,12 @@ Keep failures attributable to one layer:
 5. integrate the existing login identity;
 6. run the exact Doubao client and model smoke test.
 
+Select only through the last capability required by the task. The list is
+ordered, not mandatory in full. A transport task stops before OAuth. An OAuth
+server task stops before a real identity provider unless identity integration
+is included. A server task stops before a target client unless compatibility
+with that client is included.
+
 Do not start browser OAuth debugging before the protected tool call works with
 a test fixture. Do not start target-client debugging before the complete OAuth
 integration test works without that client.
@@ -39,8 +64,20 @@ Use this execution cadence:
   known green;
 - run only the focused gate tests while implementing;
 - finish all planned focused cases before running the full suite;
-- run the full suite once and the production build once at the end;
+- run the affected module suite and configured build once at the end;
+- run a repository-wide suite only when shared contracts changed or the user
+  requested release-level verification;
 - rerun either only when code changes after that gate.
+
+### Database Boundary
+
+Use repositories, services, and test fixtures to prepare and assert data.
+For ephemeral or in-memory databases, do not query tables manually, inspect
+temporary database files, or launch a database console as routine evidence.
+
+Inspect database state only when a focused persistence test fails and a
+database-level check is the next discriminating step. Stop after resolving that
+specific failure; do not turn database exploration into a parallel audit.
 
 ### stdio Process Contract
 
@@ -64,7 +101,7 @@ Assert exact status, headers, content type, and JSON:
 
 | Case | Expected |
 | --- | --- |
-| Missing bearer token | `401` and Bearer `resource_metadata` |
+| Missing bearer token | `401` and a Bearer challenge; include `resource_metadata` when OAuth protected-resource discovery is in scope |
 | Invalid token | `401`, no implementation details |
 | Valid token, missing scope | `403` and `insufficient_scope` |
 | Invalid Origin | `403` |
@@ -168,11 +205,16 @@ For writes also test:
 
 ### Model Evaluation
 
-Run the cases from `tool-design-for-reliable-model-use.md` with the least capable supported model. Store prompts, expected tool sequence, actual tool calls, and pass/fail result without secrets or personal data.
+Run the cases from `tool-design-for-reliable-model-use.md` only when model-tool
+selection quality is part of the requested scope or final release validation.
+Store prompts, expected tool sequence, actual tool calls, and pass/fail result
+without secrets or personal data.
 
 ## Bundled HTTP Probe
 
-The probe performs read-only unauthenticated HTTP discovery. Do not use it for stdio:
+The probe performs read-only unauthenticated HTTP discovery. Use it only when
+runtime metadata or deployment behavior is in scope. Do not use it for stdio
+or as a substitute for focused tests:
 
 ```bash
 python3 scripts/verify_remote_mcp.py \
@@ -230,7 +272,8 @@ Use only against systems the user owns or is explicitly authorized to test. The 
 
 ## MCP Client Tests
 
-Use the official MCP Inspector or SDK test client for the protocol revisions in the implementation contract. Verify:
+Use the official MCP Inspector or SDK test client only when protocol-client
+compatibility is in scope. Verify:
 
 - tool listing;
 - structured schemas;
@@ -261,7 +304,10 @@ Before production:
 - confirm downstream credentials are separate;
 - confirm write tools enforce confirmation and idempotency.
 
-## Production Smoke Test
+## Final Integration Smoke Test
+
+Run this section only for explicit product integration or release validation.
+Do not run it after every implementation slice.
 
 For stdio:
 
@@ -289,7 +335,7 @@ Remove test data and revoke tokens after the smoke test.
 
 ## Completion Evidence
 
-Record:
+Record only evidence produced for the requested scope:
 
 ```text
 Focused tests:
@@ -299,7 +345,7 @@ Focused tests:
 
 Protocol probe:
   <exact command without secrets>
-  <PASS/WARN/FAIL summary>
+  <PASS/WARN/FAIL summary, or "not in scope">
 
 stdio subprocess test:
   <exact command>
@@ -308,7 +354,7 @@ stdio subprocess test:
 Model evaluation:
   <product and model ID>
   <tool list>
-  <pass count>
+  <pass count, or "not in scope">
 
 Residual risks:
   <explicit list or "none identified">

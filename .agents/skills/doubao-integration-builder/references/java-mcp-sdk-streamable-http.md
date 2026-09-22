@@ -1,19 +1,73 @@
 # Official MCP Java SDK Streamable HTTP
 
 Use this reference when a Java Servlet or Spring Boot application integrates
-the official MCP Java SDK directly. Select this path when a framework adapter
-cannot prove compatibility with the target client's MCP revision or state
-model.
+the official MCP Java SDK directly. Select this path when the repository used
+the direct SDK before the task, or when a focused compatibility test proves
+that the available Spring AI adapter cannot satisfy a required transport,
+state-model, protocol, or request-context contract.
 
-Do not copy versions from this reference. Resolve one SDK release that matches
-the repository's Java, JSON stack, Servlet generation, and target protocol,
-then inspect only that release.
+Do not select the direct SDK merely because it offers lower-level control. For
+a new Spring Boot integration, prefer a compatible Spring AI MCP Boot starter
+and use the SDK core through that integration layer.
 
-## Gate 1: Executable Transport Spike
+## Existing-Stack Fast Path
+
+When the repository already declares one MCP SDK version and matching JSON
+module, use them. Do not compare Spring AI, other SDKs, or newer releases unless
+a focused compile or transport test proves incompatibility.
+
+When no MCP dependency exists, select one release compatible with the
+repository's Java, JSON stack, Servlet generation, and required protocol. Freeze
+that choice after the first successful compile.
+
+For SDK 2.x repositories where these APIs are present, use this production
+shape directly instead of researching alternative adapters:
+
+```java
+@Bean
+HttpServletStatelessServerTransport mcpTransport() {
+    return HttpServletStatelessServerTransport.builder()
+            .jsonMapper(McpJsonDefaults.getMapper())
+            .messageEndpoint("/mcp")
+            .contextExtractor(request -> extractVerifiedPrincipal())
+            .build();
+}
+
+@Bean
+McpStatelessSyncServer mcpServer(
+        HttpServletStatelessServerTransport transport
+) {
+    return McpServer.sync(transport)
+            .serverInfo("service-name", "1.0.0")
+            .capabilities(
+                    McpSchema.ServerCapabilities.builder().tools(true).build()
+            )
+            .toolCall(toolDefinition(), toolHandler())
+            .build();
+}
+
+@Bean
+ServletRegistrationBean<HttpServletStatelessServerTransport> mcpServlet(
+        HttpServletStatelessServerTransport transport,
+        McpStatelessSyncServer server
+) {
+    var registration = new ServletRegistrationBean<>(transport, "/mcp");
+    registration.setLoadOnStartup(1);
+    return registration;
+}
+```
+
+Use the repository's existing bean names, endpoint, server metadata, principal
+type, and application services. The server parameter on the registration bean
+ensures the server is created before the Servlet handles requests.
+
+If one symbol differs in the pinned release, inspect that release's installed
+source or one matching official example. Do not reopen transport selection.
+
+## Focused Transport Proof
 
 Dependency resolution and compilation do not prove transport compatibility.
-Before editing production security or OAuth code, build a disposable spike
-that:
+Add a focused embedded-server test that:
 
 1. creates the selected Streamable HTTP transport;
 2. registers it through the host's real Servlet container;
@@ -27,6 +81,9 @@ For a stateless target, use the SDK's stateless transport type and prove that
 initialize and tool calls succeed without a session identifier. For a stateful
 target, capture and propagate the server-issued session identifier. Do not
 start with one model and switch after application code is written.
+
+Use the real requested tool when it is already small and deterministic; a
+separate no-op tool is unnecessary in that case.
 
 The spike must use the same JSON mapper family as the host application. Select
 the SDK JSON module that matches the resolved Jackson generation or other JSON
@@ -157,8 +214,8 @@ When a bridge filter belongs only to a security chain:
 ## Gradle Execution Discipline
 
 Resolve the dependency graph once after versions are frozen. For one unknown
-API, inspect one official example or one installed source/JAR, then code
-against that result.
+API, inspect one matching official example or the selected installed
+source/JAR, then code against that result.
 
 Do not scan every cached SDK release. Do not use broad cache searches as the
 normal API discovery mechanism.
@@ -171,13 +228,13 @@ new JVM.
 Use this cadence:
 
 1. one dependency resolution;
-2. one executable transport spike;
-3. focused test for the current gate;
-4. full module suite once after all focused gates pass.
+2. one focused embedded-server transport test;
+3. focused test for the requested security or identity behavior when in scope;
+4. affected module suite once after focused tests pass.
 
 ## Focused Test Ladder
 
-Use separate focused tests so failures remain attributable:
+Select only stages required by the current task:
 
 1. real HTTP stateless or stateful transport spike;
 2. anonymous challenge and protected tool with a test token;
@@ -188,6 +245,11 @@ Use separate focused tests so failures remain attributable:
 7. MCP call with the issued access token;
 8. existing-login resume flow;
 9. exact target-client smoke test.
+
+Stages are ordered, not universally mandatory. Do not run OAuth, identity,
+runtime, or target-client stages when they are outside the requested scope.
+The target-client smoke test belongs to explicit client integration or final
+release validation.
 
 Do not use one full-flow test as the diagnostic loop for every lower layer.
 Once a lower layer passes, keep its focused test unchanged while progressing.
@@ -203,4 +265,4 @@ Record:
 - exact request headers and response framing;
 - focused gate test results;
 - Gradle commands and invocation count;
-- exact target-client result or an explicit unverified status.
+- target-client result only when target-client compatibility was in scope.

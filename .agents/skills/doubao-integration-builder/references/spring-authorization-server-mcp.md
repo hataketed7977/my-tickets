@@ -8,6 +8,11 @@ Prefer an existing standards-compliant authorization server when it can issue
 tokens for the canonical MCP resource. Self-host Spring Authorization Server
 only when the product requires it.
 
+When the repository already pins Spring Authorization Server or manages it
+through the current Spring Boot dependency set, preserve that choice. Do not
+compare releases or upgrade unless a focused compile or contract test proves
+incompatibility.
+
 ## Ownership Boundaries
 
 Spring Authorization Server owns:
@@ -157,10 +162,10 @@ Use Spring Security's bounded saved-request mechanism to resume the original
 authorization request after upstream login. Do not store arbitrary return URLs
 in browser-controlled parameters.
 
-## Fixed Test Ladder
+## Capability Test Ladder
 
-Do not diagnose the complete browser flow with one large test. Pass these
-focused checks in order:
+Do not diagnose the complete browser flow with one large test. Select focused
+checks through the last capability required by the task and run them in order:
 
 1. authorization-server context loads with all required beans;
 2. metadata exposes issuer, authorization, token, JWK, PKCE, and registration
@@ -175,6 +180,11 @@ focused checks in order:
 8. missing PKCE, redirect mismatch, resource mismatch, and code replay fail;
 9. the issued token calls one protected MCP tool;
 10. signed-out upstream login resumes the same authorization transaction.
+
+Checks 5 and 10 apply only when existing-login identity integration is in
+scope. A protocol-only authorization-server task may stop after the issued
+token calls the protected tool. Real identity-provider and target-client
+validation belong to explicit integration or final release scope.
 
 Do not rerun step 9 to diagnose a failure in steps 2-7.
 
@@ -211,11 +221,11 @@ Record:
 - issuer and canonical MCP resource;
 - registration mode and client authentication profile;
 - persistence and signing-key strategy;
-- identity bridge and filter position;
-- every focused test-ladder result;
+- identity bridge and filter position when identity integration was in scope;
+- focused test-ladder results through the requested capability;
 - negative PKCE, redirect, resource, replay, and audience tests;
-- signed-out resume-flow result;
-- exact target-client result or explicit unverified status.
+- signed-out resume-flow result when identity integration was in scope;
+- target-client result only when client compatibility was in scope.
 
 Do not claim production readiness from successful code exchange alone.
 

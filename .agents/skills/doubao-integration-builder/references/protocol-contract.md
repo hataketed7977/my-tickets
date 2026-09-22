@@ -107,12 +107,18 @@ Require or verify:
 
 ## Client Registration
 
-Determine the exact target client's registration behavior before implementing
-the authorization server. Client-specific requirements override the generic
-preference order below. In particular, the currently documented Doubao Work
-MCP OAuth 2.1 connector performs Dynamic Client Registration and does not ask
-the user to configure a client ID; advertise and implement
-`registration_endpoint` for that surface.
+When a target client is explicitly in scope, use its behavior already recorded
+in the selected integration reference. Do not research it again unless current
+documentation or a focused compatibility failure conflicts with that record.
+Client-specific requirements override the generic preference order below.
+
+The currently documented Doubao Work MCP OAuth 2.1 connector performs Dynamic
+Client Registration and does not ask the user to configure a client ID;
+advertise and implement `registration_endpoint` for that surface.
+
+When target-client integration is outside scope, implement the registration
+mode frozen in the task contract and verify it with an automated client
+fixture. Do not launch a product client merely to choose a registration mode.
 
 Select in this order:
 

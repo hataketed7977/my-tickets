@@ -5,10 +5,21 @@ Use `spring-authorization-server-mcp.md` separately when Spring Authorization
 Server is selected. Use `java-mcp-sdk-streamable-http.md` instead when the
 official MCP Java SDK is integrated directly.
 
+Spring AI is the preferred integration layer for a new Spring Boot MCP service
+when its version supports the required transport, state model, protocol
+revision, and request context. It extends the MCP Java SDK with Boot starters,
+auto-configuration, Spring transports, and annotations; it does not replace
+the SDK protocol core.
+
 ## Compatibility Gate
 
-Do not choose Spring AI from framework familiarity. Resolve its transitive MCP
-Java SDK and prove that it supports every target-client requirement:
+When the repository already pins Spring AI and its MCP starter, keep that
+choice. Do not compare alternative transports unless a focused test proves
+that the selected adapter cannot satisfy the requested contract.
+
+For a new selection, do not choose Spring AI from framework familiarity.
+Resolve its transitive MCP Java SDK and prove that it supports the required
+task contract:
 
 ```text
 Spring Boot and Spring AI compatibility
@@ -21,9 +32,10 @@ tool registration API
 request-context propagation
 ```
 
-Dependency resolution and compilation are insufficient. Build an executable
-transport spike that initializes the server and calls one no-op tool using the
-required state model.
+Dependency resolution and compilation are insufficient when transport behavior
+is being added or changed. Add a focused embedded-server test that initializes
+the server and calls one tool using the required state model. Reuse an existing
+green transport test when the task changes only tools or business behavior.
 
 If any requirement cannot be proven from the selected release's installed API,
 official documentation, and spike, use the official MCP Java SDK directly.
@@ -120,10 +132,11 @@ official MCP Java SDK transport or another supported adapter.
 
 ## Focused Transport Test
 
-Before adding an authorization server, prove:
+When transport or protection is in scope, prove:
 
 1. anonymous `/mcp` returns `401` and the required challenge;
-2. a test-only valid token passes issuer, audience, and scope validation;
+2. when standards-based bearer protection is in scope, a test-only valid token
+   passes issuer, audience, and scope validation;
 3. `initialize` negotiates the required revision;
 4. the response uses the documented JSON or SSE framing;
 5. stateful mode propagates its session identifier, or stateless mode does not
@@ -131,7 +144,8 @@ Before adding an authorization server, prove:
 6. `notifications/initialized` follows notification semantics;
 7. `tools/list` includes the explicit tool name;
 8. one tool call returns the expected authorized result;
-9. wrong issuer, audience, and scope are rejected.
+9. when token validation is in scope, wrong issuer, audience, and scope are
+   rejected.
 
 Use the real HTTP boundary selected by the starter. Do not use a direct
 `tools/list` call as a transport health check.
@@ -152,9 +166,9 @@ Do not:
 
 Run:
 
-1. executable transport spike;
-2. focused protected transport test;
-3. full module suite once after later gates pass.
+1. focused embedded-server test for the changed behavior;
+2. focused protection test when security is in scope;
+3. affected module suite once after focused tests pass.
 
 ## Common Failure Modes
 
@@ -180,7 +194,7 @@ Record:
 - authentication context propagation;
 - focused transport test command and result;
 - full module test result;
-- target-client result or explicit unverified status.
+- target-client result only when client compatibility was in scope.
 
 ## Primary Sources
 

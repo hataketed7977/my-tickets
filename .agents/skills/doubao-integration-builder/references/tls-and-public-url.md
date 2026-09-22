@@ -165,7 +165,12 @@ addresses and test the effective generated URLs.
 
 ## Browser and Desktop Client Trust
 
-Verify the complete certificate chain from each real client class:
+For configuration or implementation work, validate configuration syntax and
+automated TLS assertions first. Do not launch every client class as routine
+evidence.
+
+During explicit client integration or final release validation, verify the
+complete certificate chain from each real client class that is in scope:
 
 - operating-system HTTP client;
 - supported browser;
@@ -181,9 +186,13 @@ Certificate trust proves server identity and channel encryption. It does not
 replace OAuth client validation, user authentication, token audience checks,
 or product authorization.
 
-## Verification Gate
+## Release Verification Gate
 
-For each supported environment, verify:
+Run this complete gate only for final integration or release validation. For a
+narrow TLS configuration task, stop after the affected automated checks and
+record the remaining runtime checks.
+
+For each supported environment in scope, verify:
 
 1. the public MCP URL succeeds with normal certificate verification enabled;
 2. the certificate chain reaches an expected trust anchor;
@@ -195,8 +204,8 @@ For each supported environment, verify:
    canonical HTTPS URLs;
 7. browser-login cookies have deliberate `Secure` and `SameSite` attributes;
 8. Web-to-API requests use a compatible scheme and origin policy;
-9. the target Doubao surface completes discovery without a certificate
-   warning;
+9. when target-client integration is in scope, the target surface completes
+   discovery without a certificate warning;
 10. certificate and private-key files are absent from source history and build
     output.
 

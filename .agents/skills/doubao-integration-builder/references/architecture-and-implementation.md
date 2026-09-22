@@ -196,7 +196,9 @@ Choose a narrow, common, read-only operation. Call an existing service method. R
 - concise text for user display;
 - structured content matching an output schema.
 
-Write the end-to-end test before adding more tools.
+Write a focused command, subprocess, or embedded-server contract test before
+adding more tools. Reserve product-level end-to-end testing for explicit client
+integration or final release validation.
 
 ### Shared Slice: Mutations
 

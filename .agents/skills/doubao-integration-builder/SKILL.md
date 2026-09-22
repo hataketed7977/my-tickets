@@ -3,427 +3,289 @@ name: doubao-integration-builder
 description: Build integrations for Doubao and AI agents through Node.js CLI, local stdio MCP, or remote Streamable HTTP MCP. Use when exposing existing systems as agent-callable capabilities.
 ---
 
-# 豆包 Integration Builder
+# Doubao Integration Builder
 
-Implement the integration in the target repository. Do not stop at architecture notes unless the user asks for design only.
+Implement the requested integration in the target repository. Optimize for the
+shortest path to trustworthy evidence. Do not stop at architecture notes unless
+the user asks for design only.
 
-## Scope
+## Priorities
 
-Build an agent-facing integration around an existing system or local tool.
-Select Node.js CLI, local stdio MCP, or remote Streamable HTTP deliberately,
-secure the selected boundary, and make the interface reliable for both people
-and models.
+Apply these priorities in order:
+
+1. Preserve explicit user requirements and existing repository decisions.
+2. Reuse a matching implementation recipe instead of researching alternatives.
+3. Produce the smallest complete behavior in the requested scope.
+4. Verify it with the lightest deterministic evidence that proves that scope.
+5. Escalate to broader tests, live processes, external clients, or data
+   inspection only when the task requires them or concrete failure evidence
+   points there.
 
 Do not:
 
-- force MCP when a CLI already satisfies the caller, deployment, and contract requirements;
-- force a CLI when protocol-level discovery, typed schemas, cancellation, or remote multi-user access is required;
-- replace the product's existing login or authorization model;
-- build a new identity provider when a maintained OAuth authorization server can be used;
-- hand-write OAuth authorization or token endpoints for production;
-- infer that production safeguards may be skipped from a branch name, repository name, localhost URL, sample data, or workshop-like structure;
-- pass an upstream or downstream API token through as the MCP access token;
-- add role systems, admin concepts, or broad scopes not already required by the product;
-- expose every internal API as a tool;
-- build CLI commands by concatenating model-controlled shell strings;
+- reconsider a working or pinned stack without incompatibility evidence;
+- search for the latest dependency or protocol revision when the repository
+  already fixes one and the user did not request an upgrade;
+- force MCP when a CLI satisfies the caller and contract requirements;
+- force CLI when protocol discovery, typed schemas, cancellation, or remote
+  multi-user access is required;
 - use MCP OAuth for local stdio transport;
-- expose a local stdio server as a network listener.
+- expose a local stdio server as a network listener;
+- replace the product's existing login or authorization model;
+- hand-write production OAuth authorization or token endpoints when a
+  maintained authorization server is available;
+- pass an upstream or downstream API token through as the MCP access token;
+- expose every internal API as a command or tool;
+- build CLI commands by concatenating model-controlled shell strings;
+- infer that production safeguards may be skipped from repository names,
+  localhost URLs, sample data, or workshop-like structure.
 
-## Default Recommendation
+## Freeze Existing Decisions
 
-Choose the first matching row and stop reconsidering unless repository evidence
-invalidates it:
+Inspect dependency manifests, nearby integration code, configuration, and
+focused tests first.
 
-| Situation | Recommended architecture |
+If the repository state that existed before the current task already pins an
+SDK, transport, security framework, JSON stack, protocol revision, or
+deployment boundary, treat that choice as frozen unless:
+
+- the user explicitly requests migration or upgrade; or
+- a focused compile or behavior test proves that it cannot satisfy the
+  requested contract.
+
+Do not treat dependencies or architecture introduced during the current
+attempt as pre-existing decisions. Use the task-start diff or committed
+baseline to distinguish them without exploring unrelated history.
+
+Do not compare alternatives, build a compatibility matrix, inspect unrelated
+cached releases, or browse for newer versions on the fast path. For one unknown
+API, inspect the selected dependency, its installed source, or one matching
+official example and continue with that version.
+
+When no relevant decision exists, choose the first matching architecture:
+
+| Situation | Default |
 | --- | --- |
-| A maintained CLI already exposes the required operations | Extend its command and machine-output contract |
-| A local process interface is sufficient and human use or shell composition matters | Node.js CLI over existing services or APIs |
-| One user, local capabilities, and protocol discovery or typed schemas matter | Official MCP SDK with stdio; no MCP OAuth |
-| Remote or shared service with an existing OAuth/OIDC authorization server | Official MCP SDK with Streamable HTTP plus a resource server that trusts the existing issuer |
-| Remote service with only cookie or social login | Add a maintained authorization server or identity gateway, federate the existing login, and keep `/mcp` as a resource server |
-| Existing product API is separately protected | Use token exchange, on-behalf-of, a service credential, or an encrypted per-user credential; never pass through the MCP token |
+| Maintained CLI already exposes the operation | Extend its command and machine-output contract |
+| Local process and human shell use matter | Node.js CLI over existing services or APIs |
+| One local user needs MCP discovery or schemas | Official MCP SDK with stdio and no MCP OAuth |
+| Remote/shared service has an OAuth/OIDC issuer | Streamable HTTP MCP resource server trusting that issuer |
+| Remote service has only cookie or social login | Maintained authorization server federated to the existing login |
+| Product API is separately protected | Token exchange, on-behalf-of, service credential, or encrypted per-user credential |
 
-For a CLI, preserve the repository's existing runtime, package manager, command
-framework, and API clients when they are suitable. For a new Node.js CLI, use
-[nodejs-cli-integration.md](references/nodejs-cli-integration.md).
+Freeze the selected route after the first focused compile or contract test.
+Reopen selection only when new evidence invalidates it.
 
-For MCP on Spring Boot, use Spring Security OAuth2 Resource Server for bearer
-validation. Use Spring AI for MCP transport only when its resolved MCP SDK
-supports the revision and state model required by the target Doubao surface;
-otherwise use the official MCP Java SDK directly. Use the existing
-authorization server or Spring Authorization Server for OAuth. A custom
-authorization facade is allowed only for an explicitly disposable prototype;
-label it non-production and include the hardening gaps in the completion
-report.
+## Reference Router
 
-When Spring Authorization Server is selected, keep client registration,
-authorization grants, PKCE, token issuance, refresh, revocation, and JWK
-handling in the framework. Limit custom code to reviewed compatibility
-adapters such as the target client's registration profile, RFC 8707 resource
-binding, and the existing-login identity bridge.
+After the route is frozen, load only references needed for the behavior being
+implemented. Do not load selection references or alternative-framework recipes
+after a matching stack is known.
 
-## Required References
-
-Read only the files needed for the current phase:
-
-1. Read [nodejs-cli-integration.md](references/nodejs-cli-integration.md) only when the selected integration is a Node.js CLI.
-2. Read [transport-selection.md](references/transport-selection.md) before choosing stdio or HTTP after MCP is selected.
-3. Read [doubao-integration.md](references/doubao-integration.md) before selecting an MCP SDK, OAuth registration mode, or public URL.
-4. Read [protocol-contract.md](references/protocol-contract.md) only for Streamable HTTP with OAuth.
-5. Read [architecture-and-implementation.md](references/architecture-and-implementation.md) before editing MCP code.
-6. Read [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md) before defining MCP tools.
-7. Read [verification.md](references/verification.md) before writing MCP tests or declaring completion.
-8. Read [spring-ai-streamable-http.md](references/spring-ai-streamable-http.md) only when Spring AI is the selected MCP transport adapter.
-9. Read [java-mcp-sdk-streamable-http.md](references/java-mcp-sdk-streamable-http.md) when the official MCP Java SDK and a Servlet or Spring Boot host are selected.
-10. Read [spring-authorization-server-mcp.md](references/spring-authorization-server-mcp.md) when Spring Authorization Server is selected.
-11. Read [feishu-identity-bridge.md](references/feishu-identity-bridge.md) when the existing identity source is Feishu/Lark or the user asks to reuse Feishu login.
-12. Read [tls-and-public-url.md](references/tls-and-public-url.md) for Streamable HTTP when certificate trust, browser login, reverse proxies, or public URL deployment are involved.
-
-Do not load all references at once.
+- Node.js CLI implementation:
+  [nodejs-cli-integration.md](references/nodejs-cli-integration.md)
+- MCP transport choice, only when the repository and request do not already
+  determine stdio or HTTP:
+  [transport-selection.md](references/transport-selection.md)
+- Spring AI transport, only when the repository already uses it or it is the
+  selected adapter:
+  [spring-ai-streamable-http.md](references/spring-ai-streamable-http.md)
+- Official MCP Java SDK with Servlet or Spring Boot, only when the repository
+  already uses it or Spring AI cannot satisfy the required contract:
+  [java-mcp-sdk-streamable-http.md](references/java-mcp-sdk-streamable-http.md)
+- OAuth protocol contract, only when OAuth is in scope:
+  [protocol-contract.md](references/protocol-contract.md)
+- Spring Authorization Server, only when it is selected:
+  [spring-authorization-server-mcp.md](references/spring-authorization-server-mcp.md)
+- Feishu/Lark identity reuse:
+  [feishu-identity-bridge.md](references/feishu-identity-bridge.md)
+- TLS and public URLs, only when the task changes or validates ingress,
+  certificates, browser origins, or advertised URLs:
+  [tls-and-public-url.md](references/tls-and-public-url.md)
+- Tool design, only when adding or changing tools:
+  [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md)
+- Doubao product behavior, only when the task includes Doubao configuration,
+  compatibility, or live validation:
+  [doubao-integration.md](references/doubao-integration.md)
+- Cross-language architecture, only when no matching implementation recipe
+  exists or the task changes component boundaries:
+  [architecture-and-implementation.md](references/architecture-and-implementation.md)
+- Broader release verification, only for final integration or release review:
+  [verification.md](references/verification.md)
 
 ## Workflow
 
-### 1. Establish Facts
+### 1. Inspect Lightly
 
-Inspect the repository before proposing changes. Record:
+Discover only facts that determine implementation:
 
-- target agent or runtime and whether it can launch local commands, launch an
-  MCP child process, or connect only to remote MCP;
-- language, framework, package manager, and test commands;
-- existing CLI entry points, command framework, package scripts, output
-  conventions, exit codes, and distribution method;
-- existing HTTP API, authentication middleware, authorization checks, and user identity type;
-- existing OAuth/OIDC provider, issuer, token format, scopes, and secret handling;
-- public MCP URL, deployment topology, reverse proxy, and allowed origins;
-- TLS termination point, certificate authority type, private-key owner, renewal
-  owner, and trust distribution for every supported client class;
-- whether the MCP process runs on the user's machine or a remote server;
-- command, arguments, working directory, runtime, and environment needs for stdio;
-- target Doubao product and its supported credential path;
-- operations users actually need.
+- requested integration mode and target runtime;
+- existing language, framework, package manager, dependencies, and tests;
+- current authentication boundary and principal type;
+- selected transport, endpoint, protocol revision, and state model for MCP;
+- first command or tool behavior;
+- focused compile or test command;
+- TLS/public URL facts only when runtime ingress is in scope.
 
-Ask only for facts that cannot be discovered and that block a secure implementation. Never request secrets in chat or commit them.
+Stop discovery when these facts are known. Do not inspect git history, every
+module, dependency caches, live databases, or the full deployment unless a
+specific failure requires it.
 
-Stop discovery when the integration mode, runtime or framework, authentication
-boundary, first capability, and focused test command are known. For MCP also
-record the protocol version and internal principal. Do not inspect git history
-or reopen the same files unless the current tree conflicts with the task or a
-concrete failure requires it.
+For ephemeral or in-memory databases, use repository/service fixtures in tests.
+Do not query tables manually as routine verification. Inspect database state
+only when a failing persistence test identifies it as the unresolved layer.
 
-### 1.5 Reuse a Proven Recipe
+### 2. Freeze a Short Contract
 
-Before researching framework APIs from scratch:
+Record:
 
-1. identify the repository runtime, framework, package manager, and installed versions;
-2. load the matching reference recipe when one exists;
-3. verify the target runtime's process-launch and output needs for CLI, or its transport, TLS, registration, credential, and revision requirements for MCP;
-4. select one row from Default Recommendation;
-5. freeze the CLI command contract or the MCP compatibility matrix;
-6. prove that the selected framework and dependencies satisfy that contract;
-7. compile a minimal command or transport spike;
-8. write the first focused test for the current gate only.
+- selected mode and existing stack;
+- command or MCP endpoint;
+- authentication and authorization boundary;
+- one requested capability;
+- explicit non-goals;
+- the lowest evidence level that proves completion.
 
-Timebox manual HTTP probing until the focused test passes. Use a managed foreground or tool-owned server process for smoke tests; do not repeatedly launch detached processes and infer protocol failures from stale or terminated servers.
+For CLI, also freeze stdin, stdout, stderr, exit codes, JSON shape,
+configuration precedence, and packaging.
 
-The selected contract is a hard gate before dependency or integration code edits.
-Never choose a dependency version because it appears in a historical example.
-If the current framework adapter cannot be proven compatible, select an
-official MCP SDK that satisfies the matrix. If no supported implementation can
-be proven, stop and report the compatibility blocker instead of adapting an
-older transport speculatively.
+For MCP, also freeze transport, state model, protocol revision, tool name and
+schema, and resource/issuer/scope only when OAuth is in scope.
 
-Do not branch into multiple speculative implementations. When an API is
-uncertain, inspect the installed dependency or its official example once,
-record the result in the compatibility matrix, and continue with that version.
-Inspect only the selected version; do not scan every cached release or compare
-unselected APIs after the matrix is frozen.
+Do not turn this contract into a separate research deliverable.
 
-Keep the implementation plan to 3-5 behavior-complete gates. Each gate must
-end in an observable test. Do not create one task per file, class, dependency,
-or configuration edit. Rewrite the plan before coding if it is organized by
-components or contains more than five implementation gates.
+### 3. Implement One Complete Behavior
 
-For HTTP MCP, copy all five gates from section 5 into the execution checklist.
-The compatibility matrix belongs to Gate 1; do not create a separate discovery
-task that increases the gate count. Never omit the target-client gate or replace
-it with a full server-side test suite.
+Keep entry points thin and reuse existing application services. Share business
+adapters, validation, result types, and errors across CLI and MCP modes.
 
-### 1.6 Bound Execution
+For CLI:
 
-Inspect repository start scripts before running them. Treat commands that own
-a server, file watcher, event loop, foreground supervisor, or unbounded loop
-as long-running processes, not commands expected to complete.
+1. implement command parsing and stable machine output;
+2. call one existing business operation;
+3. prove success and one safe failure through a real subprocess;
+4. add authentication or packaging only when required by the request.
 
-- Do not start the full application stack during discovery or compilation.
-- Start only the service required by the current gate after its compile-time
-  and isolated checks pass.
-- Give startup and readiness checks explicit deadlines. Once readiness passes,
-  continue verification without waiting for the server command to exit.
-- Keep the process in a managed tool session and stop it when the gate ends.
-- Do not run overlapping build or test commands for the same module.
-- For a failing gate, record the failure signature, suspected layer, current
-  evidence, and one discriminating check before editing code.
-- Use one hypothesis, one bounded probe or change, and one focused rerun.
-  Confirm that a test fixture or client did not construct an invalid request
-  before changing production protocol or security code.
-- A focused test gets one initial run and at most two hypothesis-driven reruns
-  before a diagnostic reset. A gate gets at most eight build or test
-  invocations without explicit user approval.
-- At a diagnostic reset, stop editing, remove temporary probes, summarize the
-  invariants, and compare the implementation with the selected official
-  example or reference before running another test.
-- If the same failure signature survives two attempts, stop retrying. Capture
-  the exact request, response, and resolved dependency version; form a new
-  evidence-based hypothesis before another run.
-- After three rejected hypotheses or ten diagnostic actions without a new
-  observable, stop mutating code and report the gate as blocked with evidence.
-- If a gate remains red after its timebox, report the failing gate and evidence
-  instead of continuing into later gates.
+For stdio MCP:
 
-### 2. Select the Integration Boundary
+1. create the executable entry point;
+2. keep JSON-RPC only on `stdout` and logs on `stderr`;
+3. validate environment and working directory;
+4. expose one tool through an existing business service;
+5. prove the tool call and clean shutdown through a subprocess test.
 
-Choose CLI when the target can launch a local process, a command contract is
-sufficient, and human usability or shell composition is valuable. Use
-[nodejs-cli-integration.md](references/nodejs-cli-integration.md).
+For Streamable HTTP MCP, select only capabilities required by the request:
 
-Choose MCP when protocol-level discovery, typed schemas, notifications,
-cancellation, or MCP-native client configuration is required. Then use
-[transport-selection.md](references/transport-selection.md):
+1. transport and tool contract;
+2. bearer/resource protection;
+3. OAuth discovery, registration, PKCE, token, and resource binding;
+4. existing-login identity bridge;
+5. target-client integration.
 
-- choose stdio when the client launches a trusted local process for one user;
-- choose Streamable HTTP when the server is remote, shared, centrally deployed, or multi-user;
-- support CLI and MCP when people need commands and MCP clients need the same business operations.
+These are ordered capability stages, not mandatory steps for every task. Do not
+implement or verify a later stage merely because it exists. In particular:
 
-When supporting multiple modes, share business adapters, validation, result
-types, and errors. Keep each CLI or MCP entry point thin. Do not tunnel stdio
-through HTTP or duplicate business logic.
+- existing-authentication work does not imply adding OAuth;
+- OAuth server work does not imply exercising a real identity provider;
+- server implementation does not imply configuring a target client;
+- target-client end-to-end validation belongs only to an explicit integration
+  or final release scope.
 
-### 3. Freeze the Contract
+For Spring Boot HTTP MCP, preserve the adapter selected before the task. When
+starting without an adapter, prefer the Spring AI MCP Boot starter and
+annotations if its version is compatible with the repository and it supports
+the required transport, state model, protocol revision, and request context.
+Use the official MCP Java SDK directly only when the Spring adapter lacks a
+required capability or low-level Servlet control is explicitly needed.
 
-Write a short implementation contract before code:
+Spring AI extends and depends on the MCP Java SDK; they are complementary, not
+competing application frameworks. In either path, use Spring Security OAuth2
+Resource Server for standards-based bearer validation. When Spring
+Authorization Server is selected, leave client registration, grants, PKCE,
+token lifecycle, revocation, and JWK handling in the framework. Keep custom
+code limited to required compatibility adapters, resource binding, and the
+existing-login bridge.
 
-- selected integration mode or multi-mode requirement;
-- for CLI, executable name, subcommands, options, stdin, stdout, stderr, exit
-  codes, JSON shape, working directory, environment names, authentication
-  source, and packaging method;
-- for MCP, selected transport or dual-transport requirement;
-- HTTP canonical resource URI, issuer, registration mode, scopes, and audience when applicable;
-- HTTPS public URL, TLS termination point, certificate source, trust
-  distribution, and internal listener protocol when applicable;
-- stdio executable command, arguments, working directory, environment names, and local trust boundary when applicable;
-- MCP protocol versions to support when applicable;
-- command or tool inventory with read/write risk;
-- explicit non-goals.
+### 4. Design Reliable Interfaces
 
-For MCP, prefer the latest stable revision. Add older protocol behavior only
-when the named client requires it.
-
-### 4. Choose the Security Architecture
-
-For CLI and stdio, treat process launch, filesystem permissions, environment
-injection, and operating-system identity as the local boundary. The process may
-still authenticate to a downstream API, but that is downstream authentication,
-not MCP OAuth.
-
-For HTTP, use this order:
-
-1. Existing standards-compliant authorization server plus MCP resource server.
-2. Managed authorization server or gateway plus MCP resource server.
-3. A maintained framework authorization server federated to the existing identity system.
-4. A custom authorization facade only for an explicitly disposable prototype or separately reviewed compatibility exception.
-
-Keep the MCP transport adapter, token validation, business service, and downstream credential handling separate.
-
-Require explicit user instruction or written acceptance criteria before
-selecting option 4. Never infer prototype status from repository metadata.
-
-Stop and report a blocker if the proposed design requires accepting a token issued to another resource, wildcard redirect URIs, plaintext production HTTP, or secrets in source control.
-
-For remote HTTP, also stop if normal clients require disabled certificate or
-hostname validation, or if advertised HTTPS URLs do not match the actual TLS
-listener and certificate identity.
-
-### 5. Implement in Vertical Slices
-
-For a Node.js CLI, use these gates:
-
-1. freeze the command, output, error, exit-code, configuration, and packaging contract;
-2. run the fastest configured static check and prove `--help`, `--version`,
-   and one read-only command with a mocked dependency;
-3. add authentication or configuration only when required, then prove the
-   command through a real subprocess;
-4. package or install once and run one real authorized smoke test.
-
-Do not create separate tasks for the package manifest, entry point, helper,
-formatter, or each test file. Each gate must leave one complete command
-behavior working.
-
-For HTTP MCP, use these gates without adding code from a later gate before the
-current gate is green:
-
-1. compatibility matrix plus an executable transport spike that proves the
-   required state model, endpoint, protocol revision, and response framing;
-2. protected-resource metadata, anonymous `401`, bearer validation, MCP
-   initialization, tool listing, and one tool call using a test-only token or
-   disposable issuer;
-3. authorization-server discovery, client registration, PKCE, resource
-   binding, code exchange, and negative cases;
-4. existing-login identity bridge and signed-out resume flow;
-5. exact target-client smoke test.
-
-Dependency resolution or compilation alone does not pass Gate 1. For a
-stateless target, the spike must initialize and call one no-op tool without a
-session identifier. Gate 2 must not add authorization-server, dynamic client
-registration, consent, browser-login, or identity-bridge code.
-
-Within Gate 3, test in this order: metadata, registration, anonymous
-authorization redirect, authenticated code issuance, token exchange, then one
-MCP call with the issued token. Do not rerun the complete flow to diagnose an
-earlier layer.
-
-If the exact target client is unavailable, leave Gate 5 pending and report the
-server-side integration as complete but client compatibility as unverified.
-
-#### Independent HTTP delivery profiles
-
-When the prompt explicitly selects one profile, implement only that profile.
-Use the Skill and its references for implementation detail; do not require the
-prompt to repeat the full checklist.
-
-**HTTPS MCP with existing authentication**
-
-- deliver a complete HTTPS Streamable HTTP MCP service;
-- reuse an existing non-browser bearer or service authentication mechanism;
-- complete transport, authentication, one read-only tool, negative
-  authorization, and target-runtime verification;
-- do not add an OAuth authorization server, DCR, consent, browser login, PKCE,
-  or refresh-token behavior.
-
-This profile is independently complete. Do not describe it as a foundation for
-another task or assume an OAuth phase will follow.
-
-**HTTPS MCP with OAuth 2.1**
-
-- deliver the complete HTTPS MCP transport and OAuth integration from the
-  repository state found at the start;
-- complete all five HTTP MCP gates, including DCR and the existing-login bridge
-  when required;
-- do not assume the existing-authentication profile was implemented first;
-- reuse compatible existing code when present, but verify every required gate.
-
-This profile is independently complete. Do not automatically execute or depend
-on the other profile.
-
-#### stdio delivery gates
-
-For stdio:
-
-1. executable entry point;
-2. clean newline-delimited JSON-RPC on `stdout`;
-3. logs only on `stderr`;
-4. environment and working-directory validation;
-5. graceful EOF shutdown and cancellation;
-6. one tool calling an existing business service;
-7. subprocess integration tests.
-
-Then add remaining read capabilities, followed by writes with confirmation and
-audit controls. Reuse existing domain services instead of duplicating business
-logic in CLI commands or MCP handlers.
-
-### 6. Design for Reliable Model Use
-
-For CLI, apply [nodejs-cli-integration.md](references/nodejs-cli-integration.md).
-For MCP, apply every hard rule in
-[tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md).
-Across both modes:
+Across CLI and MCP:
 
 - expose a small allowlisted command or tool set;
 - use flat, strict schemas and constrained values;
 - separate lookup from mutation;
-- return stable identifiers and a compact structured result;
-- make errors machine-actionable;
-- document side effects and risk accurately.
+- return stable identifiers and compact structured results;
+- make errors machine-actionable without leaking secrets;
+- document side effects and risk accurately;
+- keep product authorization in application services.
 
-### 7. Integrate the Target Client
+For writes, require the product's confirmation, idempotency, and audit controls.
+Do not invent roles, broad scopes, or admin concepts.
 
-For CLI, verify the named agent or runtime can launch the executable with the
-required arguments, environment, working directory, and timeout, and can parse
-the documented stdout and exit codes. Never claim a Doubao surface can execute
-an arbitrary CLI unless current product evidence proves it.
+### 5. Use the Lightest Sufficient Evidence
 
-For MCP, follow [doubao-integration.md](references/doubao-integration.md). For
-HTTP, keep server configuration separate from per-user credentials and match
-the configured MCP URL exactly. For stdio, provide a reproducible command and
-inject secrets through the client environment instead of command arguments.
+Verification levels:
 
-Never claim interactive OAuth discovery works in a specific Doubao surface unless current official documentation or a live test proves it. Use its documented Vault or credential flow when required.
+1. **Compile/static** — proves dependency and type compatibility.
+2. **Focused automated test** — proves the changed behavior and its nearest
+   negative case. This is the default implementation loop.
+3. **Affected module suite/build** — proves local regression safety. Run once
+   after focused tests pass.
+4. **Managed runtime probe** — use only when the task changes runtime routing,
+   TLS, process startup, public metadata, browser-origin behavior, or another
+   boundary that automated tests cannot prove.
+5. **Real target-client end to end** — use only when explicitly requested,
+   when target-client compatibility is the deliverable, or during final release
+   validation.
 
-### 8. Verify
+Stop at the lowest level that proves the requested scope. Do not start the full
+application stack for ordinary code, transport, authorization, or identity
+tests when an embedded or subprocess test covers the boundary.
 
-For CLI, follow [nodejs-cli-integration.md](references/nodejs-cli-integration.md)
-and run focused unit, command, and subprocess tests before one final package
-and real-environment smoke test.
+Do not repeat an already green lower level unless later edits affect it. Run
+one end-to-end flow after all required lower levels are green; never use the
+full flow as the diagnostic loop for a lower-layer failure.
 
-For MCP, follow [verification.md](references/verification.md). Run the
-transport-specific focused tests. Use the bundled HTTP probe only against a
-server the user owns or is authorized to test:
+For security-sensitive behavior, focused evidence must include a denial or
+negative case. For TLS, never use disabled certificate or hostname validation
+as completion evidence.
 
-```bash
-python3 scripts/verify_remote_mcp.py \
-  --acknowledge-authorized-target \
-  https://mcp.example.com/mcp
-```
+### 6. Diagnose from Evidence
 
-For write capabilities, test denial, confirmation, idempotency, and audit
-behavior. For MCP, test tool selection with at least one weaker target model
-when available.
+Treat server owners, file watchers, foreground supervisors, and event loops as
+long-running processes. Keep them in managed sessions and stop them after the
+required runtime evidence is captured.
 
-For HTTP MCP, run verification in this order to keep feedback fast:
+On failure:
 
-1. compile the changed module;
-2. run the protected MCP transport and tool test with a test-only token or
-   disposable issuer;
-3. run focused authorization-server tests;
-4. run focused existing-login and resume-flow tests;
-5. finish the planned negative cases;
-6. run the module test suite once;
-7. start one managed server process;
-8. run metadata and negative-auth probes;
-9. for browser-login bridges, verify that Web and API use the same scheme and
-   that credentialed CORS and cookie attributes match the effective runtime
-   configuration;
-10. run the TLS gate in
-   [tls-and-public-url.md](references/tls-and-public-url.md) without trust
-   bypasses;
-11. run the real target-client smoke test.
+1. record the exact failure signature and current layer;
+2. check request or fixture validity before changing production code;
+3. form one discriminating hypothesis;
+4. make one bounded probe or change;
+5. rerun only the focused failing check.
+
+If the same signature survives without new evidence, stop editing and compare
+the selected implementation with its matching recipe or official example. Do
+not branch into alternative frameworks, broad searches, repeated full suites,
+database exploration, or live-client retries.
 
 ## Completion Report
 
-Report:
+Report only facts relevant to the requested scope:
 
-- selected integration mode and why;
-- transport and architecture selected, including why;
-- CLI executable, command contract, package or install method, configuration
-  precedence, authentication source, and supported machine-output mode when applicable;
-- whether the authorization layer is existing, managed, framework-provided, or prototype-only;
-- HTTP resource URI, issuer, scopes, and registration mode when applicable;
-- HTTPS public URL, TLS termination point, certificate authority type, trust
-  distribution, and renewal owner when applicable;
-- stdio command contract and credential source when applicable;
-- supported MCP revisions;
-- tools added and their risk class;
+- selected mode, stack, transport, and security boundary;
+- command or tool contract;
 - files changed;
-- exact tests and probe commands run with results;
-- target runtime configuration still requiring console or credential setup;
-- deferred compatibility risks.
+- exact focused tests and affected suite/build results;
+- runtime or target-client evidence only when performed;
+- deferred compatibility or deployment work outside scope.
 
-Do not report completion from discovery alone. CLI requires a packaged or
-repository-local subprocess call with stable stdout, stderr, exit codes, and a
-negative case. HTTP requires a protected tool call and a negative authorization
-case; stdio requires a real subprocess tool call, protocol-only `stdout`, clean
-shutdown, and a denied local or product permission case.
-Do not call a custom OAuth facade production-ready merely because login and one
-tool call succeed.
-If the exact target client was not exercised, report "server-side integration
-complete; target-client compatibility unverified" instead of declaring the
-integration complete.
+Do not claim behavior beyond the evidence level reached. If target-client
+compatibility was in scope but not exercised, report it as unverified. If it
+was outside scope, do not treat its absence as incomplete work.
+
+CLI completion requires a real subprocess success and safe failure. stdio MCP
+completion requires a real subprocess tool call, protocol-only `stdout`, and
+clean shutdown. HTTP MCP completion requires a focused real-HTTP or equivalent
+embedded-server test for the requested capability and its nearest negative
+case. Production readiness additionally requires the relevant release and
+target-client gates.
