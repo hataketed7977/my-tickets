@@ -62,6 +62,18 @@ cached releases, or browse for newer versions on the fast path. For one unknown
 API, inspect the selected dependency, its installed source, or one matching
 official example and continue with that version.
 
+Treat sample applications as API and protocol evidence, not architecture
+authority. When a sample hand-writes a capability owned by the selected
+framework, reuse only its verified request shapes, response shapes, API calls,
+and test vectors. Do not copy its custom protocol implementation.
+
+Use the repository's wrapper, lockfiles, dependency management, and setup
+scripts. In controlled training or CI environments, tool installation and
+dependency prefetch are environment prerequisites rather than implementation
+work. Do not change frameworks or versions merely because a download, file
+permission, or local tool setup is unavailable; report that environment
+precondition separately.
+
 When no relevant decision exists, choose the first matching architecture:
 
 | Situation | Default |
@@ -199,12 +211,16 @@ Use the official MCP Java SDK directly only when the Spring adapter lacks a
 required capability or low-level Servlet control is explicitly needed.
 
 Spring AI extends and depends on the MCP Java SDK; they are complementary, not
-competing application frameworks. In either path, use Spring Security OAuth2
-Resource Server for standards-based bearer validation. When Spring
-Authorization Server is selected, leave client registration, grants, PKCE,
-token lifecycle, revocation, and JWK handling in the framework. Keep custom
-code limited to required compatibility adapters, resource binding, and the
-existing-login bridge.
+competing application frameworks. For an existing non-OAuth Session Bearer,
+reuse the repository's current middleware, interceptor, or a narrowly scoped
+Servlet filter; do not introduce a new security architecture solely to protect
+one endpoint. For standards-based OAuth bearer validation, use Spring Security
+OAuth2 Resource Server.
+
+When Spring Authorization Server is selected, leave client registration,
+grants, PKCE, token lifecycle, revocation, and JWK handling in the framework.
+Keep custom code limited to required compatibility adapters, resource binding,
+and the existing-login bridge.
 
 ### 4. Design Reliable Interfaces
 

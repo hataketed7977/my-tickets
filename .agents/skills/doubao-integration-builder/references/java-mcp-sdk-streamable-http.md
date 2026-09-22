@@ -59,7 +59,9 @@ ServletRegistrationBean<HttpServletStatelessServerTransport> mcpServlet(
 
 Use the repository's existing bean names, endpoint, server metadata, principal
 type, and application services. The server parameter on the registration bean
-ensures the server is created before the Servlet handles requests.
+ensures the server is created before the Servlet handles requests. Configure a
+request-size limit and async Servlet support only when the repository policy or
+selected transport requires them; do not copy sample values.
 
 If one symbol differs in the pinned release, inspect that release's installed
 source or one matching official example. Do not reopen transport selection.
@@ -85,9 +87,11 @@ start with one model and switch after application code is written.
 Use the real requested tool when it is already small and deterministic; a
 separate no-op tool is unnecessary in that case.
 
-The spike must use the same JSON mapper family as the host application. Select
-the SDK JSON module that matches the resolved Jackson generation or other JSON
-stack; do not add multiple mapper modules speculatively.
+Select exactly one SDK JSON module. Prefer the host application's Jackson
+generation when the selected SDK supports it, but do not force the host and SDK
+to share a mapper generation when the SDK's supported module is isolated and
+the focused transport test passes. Do not add both Jackson modules
+speculatively.
 
 ## Servlet Test Boundary
 
@@ -122,6 +126,14 @@ Use the transport's request-context extraction hook:
 
 Do not copy bearer tokens or mutable request objects into tool context. Prefer
 an immutable principal containing subject, tenant when applicable, and scopes.
+
+For an existing non-OAuth Session Bearer, reuse the application's current
+authentication service. If the raw MCP Servlet is outside the existing MVC
+interceptor, register one narrowly scoped filter for the MCP URL, attach only
+the verified immutable principal to a request attribute, and copy that
+principal through the context extractor. Enable both request and async
+dispatch when the selected transport requires them. Do not introduce Spring
+Security solely to replace a working custom session boundary.
 
 Test:
 

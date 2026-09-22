@@ -36,6 +36,12 @@ Application code owns only:
 Do not retain custom authorization, token, code, or refresh implementations
 beside the framework flow.
 
+Standalone demos that implement `/register`, `/authorize`, `/token`, codes,
+refresh rotation, or token storage with controllers and in-memory maps are
+useful protocol fixtures, not implementation templates for this route. Reuse
+their request/response examples and negative test vectors while leaving those
+lifecycles in Spring Authorization Server.
+
 ## Required Framework Components
 
 Verify the selected Spring Authorization Server release's official minimal

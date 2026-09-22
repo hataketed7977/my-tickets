@@ -27,6 +27,25 @@ Keep these roles explicit:
 
 The MCP server may share a deployment with the authorization server, but the roles and token audiences remain distinct.
 
+## Minimal HTTP Surface
+
+Select only endpoints required by the chosen identity and registration modes:
+
+| Endpoint | Owner |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource/...` | MCP resource server |
+| `GET /.well-known/oauth-authorization-server...` | Authorization server |
+| Client registration endpoint | Authorization server or a narrow compatibility adapter |
+| Authorization endpoint | Authorization server |
+| Token endpoint | Authorization server |
+| Existing identity-provider callback | Existing login integration, when required |
+| MCP endpoint | MCP transport |
+
+Use framework-provided endpoint paths when available and advertise their exact
+URLs. Do not create duplicate aliases merely to match a sample. The identity
+provider callback is not part of MCP OAuth itself and is unnecessary when the
+authorization server already has an authenticated user.
+
 ## Canonical Resource URI
 
 Choose one stable HTTPS URI, normally the exact MCP endpoint:
