@@ -35,24 +35,34 @@ invalidates it:
 | Remote service with only cookie or social login | Add a maintained authorization server or identity gateway, federate the existing login, and keep `/mcp` as a resource server |
 | Existing product API is separately protected | Use token exchange, on-behalf-of, a service credential, or an encrypted per-user credential; never pass through the MCP token |
 
-For Spring Boot, default to Spring AI for MCP transport, Spring Security OAuth2
-Resource Server for bearer validation, and the existing authorization server
-or Spring Authorization Server for OAuth. A custom authorization facade is
-allowed only for an explicitly disposable prototype; label it non-production
-and include the hardening gaps in the completion report.
+For Spring Boot, use Spring Security OAuth2 Resource Server for bearer
+validation. Use Spring AI for MCP transport only when its resolved MCP SDK
+supports the revision and state model required by the target Doubao surface;
+otherwise use the official MCP Java SDK directly. Use the existing
+authorization server or Spring Authorization Server for OAuth. A custom
+authorization facade is allowed only for an explicitly disposable prototype;
+label it non-production and include the hardening gaps in the completion
+report.
+
+When Spring Authorization Server is selected, keep client registration,
+authorization grants, PKCE, token issuance, refresh, revocation, and JWK
+handling in the framework. Limit custom code to reviewed compatibility
+adapters such as the target client's registration profile, RFC 8707 resource
+binding, and the existing-login identity bridge.
 
 ## Required References
 
 Read only the files needed for the current phase:
 
 1. Read [transport-selection.md](references/transport-selection.md) before choosing stdio or HTTP.
-2. Read [protocol-contract.md](references/protocol-contract.md) only for Streamable HTTP with OAuth.
-3. Read [architecture-and-implementation.md](references/architecture-and-implementation.md) before editing code.
-4. Read [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md) before defining tools.
-5. Read [doubao-integration.md](references/doubao-integration.md) for the target Doubao surface.
+2. Read [doubao-integration.md](references/doubao-integration.md) before selecting an SDK, OAuth registration mode, or public URL.
+3. Read [protocol-contract.md](references/protocol-contract.md) only for Streamable HTTP with OAuth.
+4. Read [architecture-and-implementation.md](references/architecture-and-implementation.md) before editing code.
+5. Read [tool-design-for-reliable-model-use.md](references/tool-design-for-reliable-model-use.md) before defining tools.
 6. Read [verification.md](references/verification.md) before writing tests or declaring completion.
 7. Read [spring-ai-streamable-http-oauth.md](references/spring-ai-streamable-http-oauth.md) when the target is Spring Boot/Spring AI or when a proven OAuth-to-tool vertical slice is useful.
 8. Read [feishu-identity-bridge.md](references/feishu-identity-bridge.md) when the existing identity source is Feishu/Lark or the user asks to reuse Feishu login.
+9. Read [tls-and-public-url.md](references/tls-and-public-url.md) for Streamable HTTP when certificate trust, browser login, reverse proxies, or public URL deployment are involved.
 
 Do not load all references at once.
 
@@ -66,6 +76,8 @@ Inspect the repository before proposing changes. Record:
 - existing HTTP API, authentication middleware, authorization checks, and user identity type;
 - existing OAuth/OIDC provider, issuer, token format, scopes, and secret handling;
 - public MCP URL, deployment topology, reverse proxy, and allowed origins;
+- TLS termination point, certificate authority type, private-key owner, renewal
+  owner, and trust distribution for every supported client class;
 - whether the MCP process runs on the user's machine or a remote server;
 - command, arguments, working directory, runtime, and environment needs for stdio;
 - target Doubao product and its supported credential path;
@@ -84,10 +96,11 @@ Before researching framework APIs from scratch:
 
 1. identify the repository framework and installed versions;
 2. load the matching reference recipe when one exists;
-3. select one row from Default Recommendation;
-4. freeze an SDK, framework, MCP revision, issuer, resource, registration mode, and target-client compatibility matrix;
-5. compile a minimal dependency and transport spike;
-6. write one focused end-to-end test covering authentication, initialization, tool listing, and one tool call.
+3. verify the exact target client's transport, TLS, registration, credential, and MCP revision requirements;
+4. select one row from Default Recommendation;
+5. freeze an SDK, framework, MCP revision, issuer, resource, registration mode, and target-client compatibility matrix;
+6. compile a minimal dependency and transport spike;
+7. write one focused end-to-end test covering authentication, initialization, tool listing, and one tool call.
 
 Timebox manual HTTP probing until the focused test passes. Use a managed foreground or tool-owned server process for smoke tests; do not repeatedly launch detached processes and infer protocol failures from stale or terminated servers.
 
@@ -115,6 +128,8 @@ Write a short implementation contract before code:
 
 - selected transport or dual-transport requirement;
 - HTTP canonical resource URI, issuer, registration mode, scopes, and audience when applicable;
+- HTTPS public URL, TLS termination point, certificate source, trust
+  distribution, and internal listener protocol when applicable;
 - stdio executable command, arguments, working directory, environment names, and local trust boundary when applicable;
 - protocol versions to support;
 - tool inventory with read/write risk;
@@ -139,6 +154,10 @@ Require explicit user instruction or written acceptance criteria before
 selecting option 4. Never infer prototype status from repository metadata.
 
 Stop and report a blocker if the proposed design requires accepting a token issued to another resource, wildcard redirect URIs, plaintext production HTTP, or secrets in source control.
+
+For remote HTTP, also stop if normal clients require disabled certificate or
+hostname validation, or if advertised HTTPS URLs do not match the actual TLS
+listener and certificate identity.
 
 ### 5. Implement in Vertical Slices
 
@@ -201,7 +220,13 @@ Run verification in this order to keep feedback fast:
 4. run the module test suite once;
 5. start one managed server process;
 6. run metadata and negative-auth probes;
-7. run the real target-client smoke test.
+7. for browser-login bridges, verify that Web and API use the same scheme and
+   that credentialed CORS and cookie attributes match the effective runtime
+   configuration;
+8. run the TLS gate in
+   [tls-and-public-url.md](references/tls-and-public-url.md) without trust
+   bypasses;
+9. run the real target-client smoke test.
 
 ## Completion Report
 
@@ -210,6 +235,8 @@ Report:
 - transport and architecture selected, including why;
 - whether the authorization layer is existing, managed, framework-provided, or prototype-only;
 - HTTP resource URI, issuer, scopes, and registration mode when applicable;
+- HTTPS public URL, TLS termination point, certificate authority type, trust
+  distribution, and renewal owner when applicable;
 - stdio command contract and credential source when applicable;
 - supported MCP revisions;
 - tools added and their risk class;

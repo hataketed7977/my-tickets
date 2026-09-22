@@ -72,6 +72,45 @@ Provide:
 - allowed tool set and confirmation policy;
 - deployment, audit, rate limiting, and tenant isolation.
 
+#### Doubao Work MCP OAuth 2.1 profile
+
+The connector flow documented and validated on 2026-09-22 has these
+requirements:
+
+- the configured MCP Server URL is the exact endpoint, for example
+  `https://localhost:8080/mcp`;
+- the MCP server URL and advertised authorization endpoints use HTTPS, even
+  for the "internal network only" mode;
+- a local certificate must be trusted by the operating system and Doubao
+  process;
+- authorization-server metadata advertises a `registration_endpoint`;
+- Doubao calls `POST /register` and obtains its own `client_id`; users do not
+  enter a client ID in the connector form;
+- registration validates and stores the client's actual redirect URIs and
+  token endpoint authentication method;
+- `/authorize` supports the browser consent/login flow;
+- `/token` supports authorization code with PKCE S256 and should support
+  refresh-token rotation for durable connections;
+- the MCP transport supports the protocol revision and state model negotiated
+  by the current Doubao client.
+
+For a Spring Boot server, do not select Spring AI solely because the project
+already uses Spring. First verify that the selected Spring AI release and its
+transitive MCP SDK implement this client profile. If not, use the official MCP
+Java SDK's compatible Streamable HTTP transport directly.
+
+Typical failure signatures:
+
+| Server log stops after | Likely compatibility gap |
+| --- | --- |
+| No request reaches the server | Address, network route, or certificate trust |
+| Protected-resource metadata | Invalid or unreachable authorization-server URL |
+| Authorization-server metadata | HTTP authorization URL or missing dynamic registration |
+| `POST /register` | Invalid registration request or unsupported client metadata |
+| `/authorize` | Redirect URI, consent, browser state, or upstream login |
+| `/token` | Client authentication, PKCE, resource, code replay, or refresh rotation |
+| `/mcp` | Bearer validation, protocol revision, headers, or transport framing |
+
 ### Dual transport
 
 Support both only through shared tools and separate launch adapters:
@@ -248,6 +287,8 @@ Record the model ID, product surface, date, protocol version, and enabled tool l
 
 ## Official Sources
 
+- Doubao Work MCP OAuth 2.1 integration and Java demo:
+  https://bytedance.larkoffice.com/docx/QfXCdgYoqousxvxI8APcwF1qnxh
 - Managed Agents MCP configuration: https://docs.volcengine.com/docs/82379/2553718?lang=zh
 - Managed Agents Vault authentication: https://docs.volcengine.com/docs/ark/use-vaults-authentication?lang=zh
 - AgentKit MCP service invocation: https://www.volcengine.com/docs/86681/2222941?lang=zh

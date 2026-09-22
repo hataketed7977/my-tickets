@@ -2,7 +2,9 @@
 
 Use this recipe for an existing Spring Boot application that needs a remote
 MCP endpoint, reuses an existing browser login as the user identity source,
-and exposes a first authenticated tool.
+and exposes a first authenticated tool. Choose between Spring AI and the
+official MCP Java SDK from target-client compatibility, not framework
+familiarity.
 
 This is a vertical-slice recipe, not a recommendation to build a general
 authorization server. Prefer an existing or managed OAuth authorization
@@ -40,7 +42,7 @@ Doubao or MCP client
        -> authorization code + PKCE S256
        -> MCP-audience access token
   -> Spring Security OAuth2 Resource Server
-  -> Spring AI Streamable HTTP transport
+  -> compatible Spring AI or official MCP Java SDK transport
   -> small allowlisted tools
   -> existing application services and authorization
 ```
@@ -56,10 +58,11 @@ Select the authorization layer in this order:
 4. Use custom `/authorize` and `/token` code only for a disposable prototype
    or a narrowly reviewed compatibility facade.
 
-Spring AI owns MCP framing. Spring Security Resource Server owns bearer
-authentication. The authorization server owns client registration, redirect
-URI validation, PKCE, code lifecycle, token issuance, refresh, and revocation.
-Application services continue to own object-level product authorization.
+The selected MCP SDK owns framing. Spring Security Resource Server owns bearer
+authentication when its integration fits the selected transport. The
+authorization server owns client registration, redirect URI validation, PKCE,
+code lifecycle, token issuance, refresh, and revocation. Application services
+continue to own object-level product authorization.
 
 If the existing application login is represented only by a custom cookie and
 MVC interceptor, add one authentication bridge that creates a trusted Spring
@@ -72,6 +75,12 @@ Skip this section unless the user explicitly requests a disposable prototype
 or written acceptance criteria permit a custom authorization facade. Never
 infer prototype status from a repository or branch name, localhost, seed data,
 or workshop-like structure.
+
+Require an explicit non-default mode such as
+`app.mcp.auth-mode=prototype-facade`. Do not assign this value as a default.
+Reject it at startup in environments whose deployment policy requires a
+maintained authorization server, and report the active mode and hardening gaps
+without logging secrets.
 
 One validated prototype used this flow:
 
@@ -106,15 +115,46 @@ Keep four boundaries distinct:
 Never give the MCP client the web session cookie or reuse an upstream identity
 provider token as the MCP access token.
 
+## Transport SDK Decision
+
+Use Spring AI when its resolved MCP Java SDK supports every requirement in the
+target-client matrix. Use the official MCP Java SDK directly when Spring AI
+lags the required MCP revision or transport state model.
+
+For the Doubao Work MCP OAuth 2.1 profile documented on 2026-09-22, verify all
+of these before selecting Spring AI:
+
+- HTTPS MCP and authorization URLs, including local testing;
+- Dynamic Client Registration through an advertised `registration_endpoint`;
+- the current stateless Streamable HTTP transport;
+- the negotiated protocol revision and required headers.
+
+The validated Doubao Java demo used the official SDK directly with
+`HttpServletStatelessServerTransport`. Do not force an older stateful Spring AI
+adapter to emulate the current client protocol.
+
 ## Recommended Dependencies and Configuration
 
-Resource server and MCP transport:
+Spring Security resource server:
 
 ```groovy
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+```
+
+Choose one MCP transport dependency.
+
+Spring AI, only when compatible:
+
+```groovy
 implementation platform("org.springframework.ai:spring-ai-bom:$springAiVersion")
 implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+```
+
+Official MCP Java SDK, when direct integration is required:
+
+```groovy
+implementation "io.modelcontextprotocol.sdk:mcp:$mcpSdkVersion"
 ```
 
 Set `springAiVersion` through the repository's existing version catalog,
@@ -138,9 +178,10 @@ Let the repository's Spring Boot dependency management select a compatible
 Spring Authorization Server version. Pin and test the resulting versions in
 CI rather than mixing arbitrary examples from other releases.
 
-Illustrative resource-server configuration follows. Property names under
-`spring.ai.mcp` vary across Spring AI releases; verify them against the
-selected version's configuration metadata before editing:
+Illustrative Spring AI resource-server configuration follows. Skip the
+`spring.ai.mcp` block when using the official Java SDK directly. Property names
+vary across Spring AI releases; verify them against the selected version's
+configuration metadata before editing:
 
 ```yaml
 spring:
@@ -172,6 +213,31 @@ Fail startup when issuer, resource, key discovery, or required scopes are
 missing. Add an explicit audience validator because issuer validation alone is
 not sufficient.
 
+Bind security settings through typed, validated configuration instead of
+scattered `@Value` fields:
+
+```java
+@Validated
+@ConfigurationProperties("app.mcp")
+public record McpSecurityProperties(
+        @NotNull URI issuer,
+        @NotNull URI resource,
+        @NotEmpty Set<String> requiredScopes,
+        @NotNull AuthorizationMode authMode
+) {
+    public enum AuthorizationMode {
+        EXTERNAL,
+        FRAMEWORK,
+        PROTOTYPE_FACADE
+    }
+}
+```
+
+Enable configuration-property scanning using the repository's existing
+convention. Add mode-specific validation for issuer discovery, signing keys,
+client registration, and HTTPS. A missing or malformed security value must
+prevent startup rather than fail during the first authorization request.
+
 For local development, use a disposable authorization-server profile with a
 persistent test key or a containerized test issuer. Do not make a random
 per-process HMAC signing key part of the production recipe; every restart
@@ -179,6 +245,18 @@ invalidates tokens and shared-secret validation prevents clean key
 distribution and rotation.
 
 ## Spring Authorization Server Defaults
+
+Add the Spring Boot authorization-server starter and compile before replacing
+an existing implementation. Then let Spring Authorization Server own:
+
+- authorization-code and refresh-token persistence;
+- exact redirect URI and client authentication checks;
+- PKCE validation and authorization-code replay handling;
+- JWT encoding, JWK publication, token response formatting, and refresh-token
+  rotation.
+
+Do not retain parallel custom code paths for those responsibilities after the
+framework flow passes its integration tests.
 
 When self-hosting is necessary, pre-register the target client with exact
 redirect URIs and require PKCE. The following example is for a public client
@@ -242,6 +320,36 @@ surface. Verify that the selected Spring Authorization Server version supports
 the required RFC 8707 `resource` behavior. If it does not, use a maintained
 gateway or a reviewed framework extension; do not silently omit resource
 binding.
+
+Two narrow compatibility adapters may be necessary:
+
+1. If the target client performs unauthenticated RFC 7591 registration while
+   the framework's built-in OIDC registration endpoint requires an initial
+   access token, validate the request and save a framework
+   `RegisteredClient`. Do not implement grants, codes, or tokens in this
+   adapter.
+2. If the selected framework release does not validate RFC 8707 `resource`,
+   require the canonical resource at both authorization and token endpoints,
+   preserve it with the authorization, and set the JWT audience through the
+   framework token customizer.
+
+Use the framework's JDBC repositories when the application already has a
+database. Start from the exact schema bundled with the resolved framework
+version, then adapt only SQL data types required by the selected database
+dialect. Test a real code exchange after the adaptation; successful table
+creation alone does not prove authorization state can be serialized and read.
+
+When bridging an existing cookie login, map the validated application session
+to a Spring Security `Authentication` before the authorization endpoint. Use
+Spring Security's bounded saved-request mechanism to resume the original
+authorization request after upstream login instead of maintaining a second
+custom authorization transaction.
+
+Serve the Web application and API with the same URL scheme. A secure
+`SameSite=Lax` session cookie can be dropped from credentialed requests when
+an HTTP Web origin calls an HTTPS API because browsers apply schemeful
+same-site rules. Verify the effective environment after loading local env
+files; stale values can override corrected defaults.
 
 ## Keep MCP Security Separate
 

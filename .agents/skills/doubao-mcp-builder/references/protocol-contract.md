@@ -107,6 +107,13 @@ Require or verify:
 
 ## Client Registration
 
+Determine the exact target client's registration behavior before implementing
+the authorization server. Client-specific requirements override the generic
+preference order below. In particular, the currently documented Doubao Work
+MCP OAuth 2.1 connector performs Dynamic Client Registration and does not ask
+the user to configure a client ID; advertise and implement
+`registration_endpoint` for that surface.
+
 Select in this order:
 
 1. Pre-register a known client when the MCP client and authorization server have an operational relationship.
