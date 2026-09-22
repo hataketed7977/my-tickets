@@ -239,12 +239,12 @@ Do not copy v1 examples using the monolithic `@modelcontextprotocol/sdk` package
 
 ## Spring Boot Routing
 
-For Spring Boot or Spring AI repositories, read
-`spring-ai-streamable-http-oauth.md` and follow its version matrix, recommended
-authorization-server architecture, security-chain pattern, fixed
-implementation gates, and compatibility tests. Do not copy partial Spring
-snippets from this generic architecture reference or hand-write JSON-RPC and
-OAuth protocol handling.
+For Spring AI transport, read `spring-ai-streamable-http.md`. For direct
+official Java SDK transport in a Servlet or Spring Boot host, read
+`java-mcp-sdk-streamable-http.md`. When Spring Authorization Server is
+selected, also read `spring-authorization-server-mcp.md`. Do not copy partial
+Spring snippets from this generic architecture reference or hand-write
+JSON-RPC and OAuth protocol handling.
 
 ## Scope and Product Permission Mapping
 
