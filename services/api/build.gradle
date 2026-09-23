@@ -7,6 +7,11 @@ plugins {
 group = 'com.bytedance'
 version = '1.0.0'
 
+// The MCP security libraries (0.0.6) require Spring Security 6.5 / SAS 1.5. Boot is
+// kept at 3.4.5 (Spring Framework 6.2 is compatible with Security 6.5); only the
+// security line is overridden because of a concrete runtime incompatibility.
+ext['spring-security.version'] = '6.5.2'
+
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
@@ -23,6 +28,12 @@ dependencies {
 
     implementation platform('org.springframework.ai:spring-ai-bom:1.1.0')
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation 'org.springframework.security:spring-security-oauth2-authorization-server:1.5.1'
+    implementation 'org.springaicommunity:mcp-authorization-server:0.0.6'
+    implementation 'org.springaicommunity:mcp-server-security:0.0.6'
 
     runtimeOnly 'com.h2database:h2'
 

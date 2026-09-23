@@ -35,6 +35,15 @@ public class AuthRepository {
         );
     }
 
+    public ApiModels.AppUser findById(String id) {
+        var users = jdbc.query(
+                USER_SELECT + " WHERE id = ?",
+                (row, index) -> mapUser(row),
+                id
+        );
+        return users.isEmpty() ? null : users.getFirst();
+    }
+
     public ApiModels.AppUser findSessionUser(
             String tokenHash,
             OffsetDateTime now

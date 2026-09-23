@@ -9,6 +9,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,15 +27,18 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public final class AuthController {
     private final AuthService authService;
+    private final RequestCache authorizationRequestCache;
     private final boolean cookieSecure;
     private final String webBaseUrl;
 
     public AuthController(
             AuthService authService,
+            RequestCache authorizationRequestCache,
             @Value("${app.cookie-secure}") boolean cookieSecure,
             @Value("${app.web-base-url}") String webBaseUrl
     ) {
         this.authService = authService;
+        this.authorizationRequestCache = authorizationRequestCache;
         this.cookieSecure = cookieSecure;
         this.webBaseUrl = webBaseUrl.replaceAll("/$", "");
     }
@@ -65,6 +70,7 @@ public final class AuthController {
                     name = AuthService.OAUTH_STATE_COOKIE,
                     required = false
             ) String expectedState,
+            HttpServletRequest request,
             HttpServletResponse response
     ) throws IOException {
         if (error != null) {
@@ -73,7 +79,7 @@ public final class AuthController {
         }
 
         if (expectedState != null) {
-            handleWebCallback(code, state, expectedState, response);
+            handleWebCallback(code, state, expectedState, request, response);
         } else {
             handleCliCallback(code, state, response);
         }
@@ -83,6 +89,7 @@ public final class AuthController {
             String code,
             String state,
             String expectedState,
+            HttpServletRequest request,
             HttpServletResponse response
     ) throws IOException {
         if (code == null
@@ -101,7 +108,10 @@ public final class AuthController {
                 sessionToken,
                 Duration.ofDays(7)
         );
-        response.sendRedirect(webBaseUrl + "/");
+
+        SavedRequest savedRequest = authorizationRequestCache.getRequest(request, response);
+        String target = savedRequest != null ? savedRequest.getRedirectUrl() : webBaseUrl + "/";
+        response.sendRedirect(target);
     }
 
     private void handleCliCallback(

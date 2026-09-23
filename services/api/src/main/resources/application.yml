@@ -32,6 +32,8 @@ app:
   web-base-url: ${WEB_BASE_URL:http://localhost:51888}
   client-origin: ${CLIENT_ORIGIN:http://localhost:51888}
   cookie-secure: ${COOKIE_SECURE:false}
+  security:
+    public-base-url: ${PUBLIC_BASE_URL:}
   feishu:
     app-id: ${FEISHU_APP_ID:}
     app-secret: ${FEISHU_APP_SECRET:}

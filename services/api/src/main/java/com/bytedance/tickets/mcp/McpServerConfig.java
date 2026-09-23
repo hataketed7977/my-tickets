@@ -2,33 +2,24 @@ package com.bytedance.tickets.mcp;
 
 import com.bytedance.tickets.exception.ApiException;
 import com.bytedance.tickets.model.ApiModels;
-import com.bytedance.tickets.security.SessionInterceptor;
+import com.bytedance.tickets.repository.AuthRepository;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.servlet.handler.MappedInterceptor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Configuration(proxyBeanMethods = false)
 class McpServerConfig {
 
     @Bean
-    MappedInterceptor mcpSessionInterceptor(SessionInterceptor sessionInterceptor) {
-        return new MappedInterceptor(new String[] {"/mcp"}, sessionInterceptor);
-    }
-
-    @Bean
-    ToolCallback getCurrentUserTool() {
+    ToolCallback getCurrentUserTool(AuthRepository authRepository) {
         return FunctionToolCallback.builder("get_current_user", () -> {
-                    var request = ((ServletRequestAttributes) RequestContextHolder
-                            .currentRequestAttributes())
-                            .getRequest();
-                    var user = (ApiModels.AppUser) request.getAttribute(
-                            SessionInterceptor.CURRENT_USER_ATTRIBUTE
-                    );
+                    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                    String userId = authentication == null ? null : authentication.getName();
+                    ApiModels.AppUser user = userId == null ? null : authRepository.findById(userId);
                     if (user == null) {
                         throw new ApiException(HttpStatus.UNAUTHORIZED, "请先登录");
                     }
