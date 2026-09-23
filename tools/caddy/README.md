@@ -32,3 +32,7 @@ Prepare the local binary and trust its CA once:
 
 The setup uses `trust.Caddyfile` only to create and trust the machine-local CA.
 It does not configure or start the application.
+
+After trust is prepared, `scripts/dev.sh` or `scripts/dev.ps1` starts Caddy with
+`dev.Caddyfile`. The public `https://localhost:55888` listener routes API, MCP,
+and OAuth paths to the internal Java listener and all other paths to Vite.

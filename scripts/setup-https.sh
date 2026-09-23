@@ -15,6 +15,8 @@ ARCHIVE_DIR="${ROOT_DIR}/tools/caddy/v${CADDY_VERSION}"
 RUNTIME_ROOT="${ROOT_DIR}/.local-tools/caddy/${CADDY_VERSION}"
 CADDY_SETUP_PORT="${CADDY_SETUP_PORT:-54443}"
 TRUST_CONFIG="${ROOT_DIR}/tools/caddy/trust.Caddyfile"
+export XDG_DATA_HOME="${RUNTIME_ROOT}/data"
+export XDG_CONFIG_HOME="${RUNTIME_ROOT}/config"
 
 fail() {
   printf '[FAIL] %s\n' "$*" >&2
@@ -43,7 +45,7 @@ expected="$(awk -v name="${archive_name}" '$2 == name { print $1 }' "${checksums
 actual="$(shasum -a 512 "${archive}" | awk '{ print $1 }')"
 [[ "${actual}" == "${expected}" ]] || fail "Checksum mismatch for ${archive_name}"
 
-mkdir -p "${runtime_dir}"
+mkdir -p "${runtime_dir}" "${XDG_DATA_HOME}" "${XDG_CONFIG_HOME}"
 tar -xzf "${archive}" -C "${runtime_dir}" caddy LICENSE
 chmod 0755 "${caddy}"
 

@@ -1,0 +1,17 @@
+{
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://localhost:{$HTTPS_PORT} {
+	tls internal
+
+	@backend path /api /api/* /mcp /mcp/* /oauth2 /oauth2/* /.well-known /.well-known/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:{$API_PORT}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:{$WEB_PORT}
+	}
+}

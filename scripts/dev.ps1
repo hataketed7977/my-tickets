@@ -23,22 +23,45 @@ if (Test-Path $EnvFile) {
     }
 }
 
-$ApiPort = if ($env:API_PORT) { $env:API_PORT } elseif ($env:PORT) { $env:PORT } else { "55888" }
+$HttpsPort = if ($env:HTTPS_PORT) { $env:HTTPS_PORT } else { "55888" }
+$ApiPort = if ($env:API_PORT) { $env:API_PORT } else { "15588" }
 $WebPort = if ($env:WEB_PORT) { $env:WEB_PORT } else { "51888" }
+$PublicBaseUrl = if ($env:PUBLIC_BASE_URL) { $env:PUBLIC_BASE_URL.TrimEnd("/") } else { "https://localhost:$HttpsPort" }
 
+$env:HTTPS_PORT = $HttpsPort
 $env:API_PORT = $ApiPort
 $env:PORT = $ApiPort
 $env:WEB_PORT = $WebPort
+$env:PUBLIC_BASE_URL = $PublicBaseUrl
 
 if (-not $env:CLIENT_ORIGIN) {
-    $env:CLIENT_ORIGIN = "http://localhost:$WebPort"
+    $env:CLIENT_ORIGIN = $PublicBaseUrl
 }
 if (-not $env:WEB_BASE_URL) {
-    $env:WEB_BASE_URL = "http://localhost:$WebPort"
+    $env:WEB_BASE_URL = $PublicBaseUrl
 }
 if (-not $env:VITE_API_BASE_URL) {
-    $env:VITE_API_BASE_URL = "http://localhost:$ApiPort"
+    $env:VITE_API_BASE_URL = $PublicBaseUrl
 }
+if (-not $env:COOKIE_SECURE) {
+    $env:COOKIE_SECURE = "true"
+}
+if (-not $env:FEISHU_REDIRECT_URI) {
+    $env:FEISHU_REDIRECT_URI = "$PublicBaseUrl/api/auth/feishu/callback"
+}
+
+$CaddyVersion = (Get-Content (Join-Path $Root "tools\caddy\VERSION") -Raw).Trim()
+$CaddyRuntimeRoot = Join-Path $Root ".local-tools\caddy\$CaddyVersion"
+$env:XDG_DATA_HOME = Join-Path $CaddyRuntimeRoot "data"
+$env:XDG_CONFIG_HOME = Join-Path $CaddyRuntimeRoot "config"
+$Architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+switch ($Architecture) {
+    "X64" { $CaddyPlatform = "windows_amd64" }
+    "Arm64" { $CaddyPlatform = "windows_arm64" }
+    default { throw "Unsupported Windows architecture: $Architecture" }
+}
+$Caddy = Join-Path $CaddyRuntimeRoot "$CaddyPlatform\caddy.exe"
+$CaddyConfig = Join-Path $Root "tools\caddy\dev.Caddyfile"
 
 function Ensure-StateDir {
     New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
@@ -194,21 +217,25 @@ function Cleanup-StartedServices {
     $RunPidFiles.Clear()
 }
 
-function Print-SuccessSummary($ApiLog, $WebLog, $ApiPidFile, $WebPidFile) {
+function Print-SuccessSummary($ApiLog, $WebLog, $CaddyLog, $ApiPidFile, $WebPidFile, $CaddyPidFile) {
     Write-Host ""
     Write-Success "ticket center local development is ready"
     Write-Host ""
     Write-Host "Services:"
-    Write-Host "  API: http://localhost:$ApiPort"
-    Write-Host "  Web: http://localhost:$WebPort"
+    Write-Host "  Web: $PublicBaseUrl"
+    Write-Host "  MCP: $PublicBaseUrl/mcp"
+    Write-Host "  API (internal): http://localhost:$ApiPort"
+    Write-Host "  Web (internal): http://localhost:$WebPort"
     Write-Host ""
     Write-Host "Logs:"
     Write-Host "  API: $ApiLog"
     Write-Host "  Web: $WebLog"
+    Write-Host "  Caddy: $CaddyLog"
     Write-Host ""
     Write-Host "PID files:"
     Write-Host "  $ApiPidFile"
     Write-Host "  $WebPidFile"
+    Write-Host "  $CaddyPidFile"
     Write-Host ""
 }
 
@@ -235,14 +262,28 @@ function Main {
 
     $ApiPidFile = Join-Path $StateDir "api.pid"
     $WebPidFile = Join-Path $StateDir "web.pid"
+    $CaddyPidFile = Join-Path $StateDir "caddy.pid"
     $ApiLog = Join-Path $StateDir "api.log"
     $WebLog = Join-Path $StateDir "web.log"
+    $CaddyLog = Join-Path $StateDir "caddy.log"
     $ApiDir = Join-Path $Root "services/api"
     $WebDir = Join-Path $Root "apps/web"
 
+    if ($HttpsPort -eq $ApiPort -or $HttpsPort -eq $WebPort -or $ApiPort -eq $WebPort) {
+        throw "HTTPS_PORT, API_PORT, and WEB_PORT must be different."
+    }
+    if (-not (Test-Path $Caddy)) {
+        throw "Bundled Caddy is not prepared. Run .\scripts\setup-https.ps1 once."
+    }
+    & $Caddy validate --config $CaddyConfig --adapter caddyfile
+    if ($LASTEXITCODE -ne 0) {
+        throw "Caddy development configuration validation failed."
+    }
+
+    Stop-PortListeners ([int]$HttpsPort)
     Stop-PortListeners ([int]$ApiPort)
     Stop-PortListeners ([int]$WebPort)
-    Remove-Item -Force $ApiPidFile, $WebPidFile -ErrorAction SilentlyContinue
+    Remove-Item -Force $ApiPidFile, $WebPidFile, $CaddyPidFile -ErrorAction SilentlyContinue
 
     try {
         Start-ServiceProcess "api" $ApiDir $ApiLog $ApiPidFile ".\gradlew.bat bootRun"
@@ -251,7 +292,11 @@ function Main {
         Start-ServiceProcess "web" $WebDir $WebLog $WebPidFile "npm.cmd run dev"
         Wait-ForHttp "http://localhost:$WebPort/" "web" $WebLog 60
 
-        Print-SuccessSummary $ApiLog $WebLog $ApiPidFile $WebPidFile
+        $CaddyCommand = "`"$Caddy`" run --config `"$CaddyConfig`" --adapter caddyfile"
+        Start-ServiceProcess "caddy" $Root $CaddyLog $CaddyPidFile $CaddyCommand
+        Wait-ForHttp "$PublicBaseUrl/api/auth/config" "caddy" $CaddyLog 30
+
+        Print-SuccessSummary $ApiLog $WebLog $CaddyLog $ApiPidFile $WebPidFile $CaddyPidFile
         Supervise-Foreground
     } catch {
         Write-Fail $_.Exception.Message

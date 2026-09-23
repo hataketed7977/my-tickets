@@ -1,6 +1,7 @@
 server:
   address: ${HOST:0.0.0.0}
-  port: ${PORT:55888}
+  port: ${PORT:15588}
+  forward-headers-strategy: framework
 
 spring:
   application:

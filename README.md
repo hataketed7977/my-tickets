@@ -30,15 +30,20 @@ controller -> service -> repository
 ```bash
 cp .env.example .env
 npm ci --prefix apps/web
+./scripts/setup-https.sh
 ./scripts/dev.sh
 ```
 
-Windows 使用 `.\scripts\dev.ps1` 启动。
+`setup-https.sh` 只需运行一次，用于准备仓库内置的 Caddy 并信任本机开发
+CA。Windows 对应执行 `.\scripts\setup-https.ps1`，之后使用
+`.\scripts\dev.ps1` 启动。
 
 启动后：
 
-- Web：`http://localhost:51888`
-- API：`http://localhost:55888`
+- Web：`https://localhost:55888`
+- MCP：`https://localhost:55888/mcp`
+- 内部 API：`http://localhost:15588`
+- 内部 Vite：`http://localhost:51888`
 
 默认数据库是 H2 内存库，Java 服务重启后业务数据会重置。
 
@@ -55,13 +60,13 @@ Java 25 在当前测试矩阵中可以通过，但 Spring Boot 3.4 和 Gradle
 
 1. 在飞书开放平台创建企业自建应用。
 2. 添加回调地址：
-   `http://localhost:55888/api/auth/feishu/callback`
+   `https://localhost:55888/api/auth/feishu/callback`
 3. 在根目录 `.env` 中配置：
 
 ```dotenv
 FEISHU_APP_ID=cli_xxx
 FEISHU_APP_SECRET=xxx
-FEISHU_REDIRECT_URI=http://localhost:55888/api/auth/feishu/callback
+FEISHU_REDIRECT_URI=https://localhost:55888/api/auth/feishu/callback
 ```
 
 前端不持有 App Secret。Java API 负责 OAuth 授权码交换、飞书用户同步和 HttpOnly Cookie 会话。系统内所有登录用户采用同一种身份。
@@ -102,15 +107,17 @@ docker compose up --build
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PORT` | `55888` | Java API 端口 |
+| `HTTPS_PORT` | `55888` | Caddy HTTPS 入口端口 |
+| `API_PORT` | `15588` | Java API 内部端口 |
 | `WEB_PORT` | `51888` | Vite 开发服务器端口 |
-| `VITE_API_BASE_URL` | 空 | 浏览器访问的 API 地址；开发代理模式可留空 |
-| `WEB_BASE_URL` | `http://localhost:51888` | OAuth 完成后的前端跳转地址 |
-| `CLIENT_ORIGIN` | `http://localhost:51888` | Java API 允许携带 Cookie 的前端 Origin |
+| `PUBLIC_BASE_URL` | `https://localhost:55888` | Web、OAuth 和 MCP 使用的规范公开地址 |
+| `VITE_API_BASE_URL` | `https://localhost:55888` | 浏览器访问的 API 地址 |
+| `WEB_BASE_URL` | `https://localhost:55888` | OAuth 完成后的前端跳转地址 |
+| `CLIENT_ORIGIN` | `https://localhost:55888` | Java API 允许携带 Cookie 的前端 Origin |
 | `DATABASE_URL` | H2 内存库 | JDBC 数据库地址 |
-| `COOKIE_SECURE` | `false` | HTTPS 环境设为 `true` |
+| `COOKIE_SECURE` | `true` | 仅通过 HTTPS 发送会话 Cookie |
 | `FEISHU_APP_ID` | 空 | 飞书应用 ID |
 | `FEISHU_APP_SECRET` | 空 | 飞书应用密钥，仅供 Java API 使用 |
-| `FEISHU_REDIRECT_URI` | 本地 API 回调地址 | 飞书 OAuth 回调地址 |
+| `FEISHU_REDIRECT_URI` | 本地 HTTPS 回调地址 | 飞书 OAuth 回调地址 |
 
 `.env` 已加入 Git 忽略列表，禁止提交真实应用密钥。

@@ -16,6 +16,8 @@ $CaddyVersion = (Get-Content (Join-Path $Root "tools\caddy\VERSION") -Raw).Trim(
 $ArchiveDir = Join-Path $Root "tools\caddy\v$CaddyVersion"
 $RuntimeRoot = Join-Path $Root ".local-tools\caddy\$CaddyVersion"
 $CaddySetupPort = if ($env:CADDY_SETUP_PORT) { $env:CADDY_SETUP_PORT } else { "54443" }
+$env:XDG_DATA_HOME = Join-Path $RuntimeRoot "data"
+$env:XDG_CONFIG_HOME = Join-Path $RuntimeRoot "config"
 
 $Architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 switch ($Architecture) {
@@ -52,6 +54,8 @@ if ($Actual -ne $Expected) {
 }
 
 New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
+New-Item -ItemType Directory -Force -Path $env:XDG_DATA_HOME | Out-Null
+New-Item -ItemType Directory -Force -Path $env:XDG_CONFIG_HOME | Out-Null
 $ExtractDir = Join-Path $RuntimeDir "extract"
 Remove-Item -Recurse -Force $ExtractDir -ErrorAction SilentlyContinue
 Expand-Archive -Path $Archive -DestinationPath $ExtractDir -Force

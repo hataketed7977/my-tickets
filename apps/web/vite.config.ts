@@ -18,12 +18,12 @@ export default defineConfig({
     },
   },
   server: {
-    host: 'localhost',
+    host: '127.0.0.1',
     port: Number(process.env.WEB_PORT ?? 51888),
     strictPort: true,
     proxy: {
       '/api': {
-        target: `http://localhost:${process.env.API_PORT ?? 55888}`,
+        target: `http://localhost:${process.env.API_PORT ?? 15588}`,
         changeOrigin: true,
       },
     },

@@ -18,15 +18,20 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
 
+import java.security.KeyPair;
+import java.security.interfaces.RSAPublicKey;
+
 @Configuration(proxyBeanMethods = false)
 class McpResourceServerSecurityConfig {
 
     private static final String PROTECTED_RESOURCE_METADATA = "/.well-known/oauth-protected-resource/**";
 
     private final SecurityBaseUrls baseUrls;
+    private final RSAPublicKey jwtVerificationKey;
 
-    McpResourceServerSecurityConfig(SecurityBaseUrls baseUrls) {
+    McpResourceServerSecurityConfig(SecurityBaseUrls baseUrls, KeyPair authorizationServerKeyPair) {
         this.baseUrls = baseUrls;
+        this.jwtVerificationKey = (RSAPublicKey) authorizationServerKeyPair.getPublic();
     }
 
     @Bean
@@ -56,10 +61,10 @@ class McpResourceServerSecurityConfig {
         return http.build();
     }
 
-    private JwtDecoder lazyMcpJwtDecoder(ResourceIdentifier resourceIdentifier) {
-        // The actual port (and JWK set URI) is only known after the embedded server has
-        // started, so the Nimbus decoder and its issuer/resource validators are created
-        // lazily on the first token rather than while the security chain is being built.
+    JwtDecoder lazyMcpJwtDecoder(ResourceIdentifier resourceIdentifier) {
+        // The issuer can depend on the embedded server port, so validators are still
+        // created lazily. Signature verification uses the colocated authorization
+        // server's public key and does not make an HTTPS request back through ingress.
         java.util.concurrent.atomic.AtomicReference<JwtDecoder> delegate = new java.util.concurrent.atomic.AtomicReference<>();
         return token -> {
             JwtDecoder decoder = delegate.get();
@@ -77,7 +82,7 @@ class McpResourceServerSecurityConfig {
     }
 
     private JwtDecoder buildMcpJwtDecoder(String issuer, ResourceIdentifier resourceIdentifier) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/oauth2/jwks").build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(jwtVerificationKey).build();
         OAuth2TokenValidator<Jwt> validator = JwtValidators.createDefaultWithValidators(
                 new JwtIssuerValidator(issuer),
                 new JwtResourceValidator(resourceIdentifier));

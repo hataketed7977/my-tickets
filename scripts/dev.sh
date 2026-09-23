@@ -21,20 +21,36 @@ if [[ -f "${ROOT_DIR}/.env" ]]; then
   set +a
 fi
 
-API_PORT="${API_PORT:-${PORT:-55888}}"
+HTTPS_PORT="${HTTPS_PORT:-55888}"
+API_PORT="${API_PORT:-15588}"
 PORT="${API_PORT}"
 WEB_PORT="${WEB_PORT:-51888}"
 
-LOCAL_WEB_URL="http://localhost:${WEB_PORT}"
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://localhost:${HTTPS_PORT}}"
 if [[ -z "${CLIENT_ORIGIN:-}" ]]; then
-  CLIENT_ORIGIN="${LOCAL_WEB_URL}"
+  CLIENT_ORIGIN="${PUBLIC_BASE_URL}"
 fi
 if [[ -z "${WEB_BASE_URL:-}" ]]; then
-  WEB_BASE_URL="${LOCAL_WEB_URL}"
+  WEB_BASE_URL="${PUBLIC_BASE_URL}"
 fi
+COOKIE_SECURE="${COOKIE_SECURE:-true}"
+FEISHU_REDIRECT_URI="${FEISHU_REDIRECT_URI:-${PUBLIC_BASE_URL}/api/auth/feishu/callback}"
 
-export API_PORT PORT WEB_PORT CLIENT_ORIGIN WEB_BASE_URL
-export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${API_PORT}}"
+export HTTPS_PORT API_PORT PORT WEB_PORT PUBLIC_BASE_URL CLIENT_ORIGIN WEB_BASE_URL
+export COOKIE_SECURE FEISHU_REDIRECT_URI
+export VITE_API_BASE_URL="${VITE_API_BASE_URL:-${PUBLIC_BASE_URL}}"
+
+CADDY_VERSION="$(tr -d '[:space:]' <"${ROOT_DIR}/tools/caddy/VERSION")"
+CADDY_RUNTIME_ROOT="${ROOT_DIR}/.local-tools/caddy/${CADDY_VERSION}"
+export XDG_DATA_HOME="${CADDY_RUNTIME_ROOT}/data"
+export XDG_CONFIG_HOME="${CADDY_RUNTIME_ROOT}/config"
+case "$(uname -m)" in
+  arm64) CADDY_PLATFORM="mac_arm64" ;;
+  x86_64) CADDY_PLATFORM="mac_amd64" ;;
+  *) CADDY_PLATFORM="unsupported" ;;
+esac
+CADDY_BIN="${CADDY_RUNTIME_ROOT}/${CADDY_PLATFORM}/caddy"
+CADDY_CONFIG="${ROOT_DIR}/tools/caddy/dev.Caddyfile"
 
 ensure_state_dir() {
   mkdir -p "${STATE_DIR}"
@@ -209,12 +225,25 @@ main() {
 
   local api_pid_file="${STATE_DIR}/api.pid"
   local web_pid_file="${STATE_DIR}/web.pid"
+  local caddy_pid_file="${STATE_DIR}/caddy.pid"
   local api_log="${STATE_DIR}/api.log"
   local web_log="${STATE_DIR}/web.log"
+  local caddy_log="${STATE_DIR}/caddy.log"
 
+  if [[ "${HTTPS_PORT}" == "${API_PORT}" || "${HTTPS_PORT}" == "${WEB_PORT}" || "${API_PORT}" == "${WEB_PORT}" ]]; then
+    fail "HTTPS_PORT, API_PORT, and WEB_PORT must be different."
+    exit 1
+  fi
+  if [[ ! -x "${CADDY_BIN}" ]]; then
+    fail "Bundled Caddy is not prepared. Run ./scripts/setup-https.sh once."
+    exit 1
+  fi
+  "${CADDY_BIN}" validate --config "${CADDY_CONFIG}" --adapter caddyfile
+
+  stop_port_listeners "${HTTPS_PORT}"
   stop_port_listeners "${API_PORT}"
   stop_port_listeners "${WEB_PORT}"
-  rm -f "${api_pid_file}" "${web_pid_file}"
+  rm -f "${api_pid_file}" "${web_pid_file}" "${caddy_pid_file}"
 
   start_service "api" "${ROOT_DIR}/services/api" "${api_log}" "${api_pid_file}" ./gradlew bootRun
   wait_for_http "http://localhost:${API_PORT}/api/auth/config" "api" "${api_log}" 120
@@ -222,16 +251,24 @@ main() {
   start_service "web" "${ROOT_DIR}/apps/web" "${web_log}" "${web_pid_file}" npm run dev
   wait_for_http "http://localhost:${WEB_PORT}/" "web" "${web_log}" 60
 
+  start_service "caddy" "${ROOT_DIR}" "${caddy_log}" "${caddy_pid_file}" \
+    "${CADDY_BIN}" run --config "${CADDY_CONFIG}" --adapter caddyfile
+  wait_for_http "${PUBLIC_BASE_URL}/api/auth/config" "caddy" "${caddy_log}" 30
+
   success "ticket center local development is ready"
   printf '\nServices:\n'
-  printf '  API: http://localhost:%s\n' "${API_PORT}"
-  printf '  Web: http://localhost:%s\n' "${WEB_PORT}"
+  printf '  Web: %s\n' "${PUBLIC_BASE_URL}"
+  printf '  MCP: %s/mcp\n' "${PUBLIC_BASE_URL}"
+  printf '  API (internal): http://localhost:%s\n' "${API_PORT}"
+  printf '  Web (internal): http://localhost:%s\n' "${WEB_PORT}"
   printf '\nLogs:\n'
   printf '  API: %s\n' "${api_log}"
   printf '  Web: %s\n' "${web_log}"
+  printf '  Caddy: %s\n' "${caddy_log}"
   printf '\nPID files:\n'
   printf '  %s\n' "${api_pid_file}"
-  printf '  %s\n\n' "${web_pid_file}"
+  printf '  %s\n' "${web_pid_file}"
+  printf '  %s\n\n' "${caddy_pid_file}"
 
   supervise_foreground
 }

@@ -100,10 +100,14 @@ class AuthorizationServerSecurityConfig {
     }
 
     @Bean
-    JWKSource<SecurityContext> jwkSource() {
-        KeyPair keyPair = generateRsaKey();
-        RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
-                .privateKey(keyPair.getPrivate())
+    KeyPair authorizationServerKeyPair() {
+        return generateRsaKey();
+    }
+
+    @Bean
+    JWKSource<SecurityContext> jwkSource(KeyPair authorizationServerKeyPair) {
+        RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) authorizationServerKeyPair.getPublic())
+                .privateKey(authorizationServerKeyPair.getPrivate())
                 .keyID(UUID.randomUUID().toString())
                 .build();
         return new ImmutableJWKSet<>(new JWKSet(rsaKey));
