@@ -1,0 +1,93 @@
+#!/bin/sh
+# 仅对本次提交改动涉及的模块执行检查，未改动的模块不跑。
+# 改动路径 -> 模块检查映射：
+#   apps/cli/**     -> npm test (vitest run)
+#   apps/web/**     -> npm run typecheck、npm run lint
+#   services/api/** -> ./gradlew test --no-daemon
+set -u
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "✗ pre-commit 必须在 Git 仓库内运行" >&2
+  exit 1
+}
+cd "$repo_root" || exit 1
+
+# 只看已暂存的新增/复制/修改/重命名文件；纯删除不需要跑测试
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$changed" ] && exit 0
+
+if [ -t 1 ]; then
+  RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); YELLOW=$(printf '\033[33m'); NC=$(printf '\033[0m')
+else
+  RED=''; GREEN=''; YELLOW=''; NC=''
+fi
+
+failures=0
+failed_logs=''
+
+# run_step "<展示名>" "<命令>"：输出完整失败日志，并标注是哪一条没过
+run_step() {
+  label=$1
+  cmd=$2
+  log=$(mktemp)
+  printf '%s▶%s [%s] %s ... ' "$YELLOW" "$NC" "$label" "$cmd"
+  if sh -c "$cmd" >"$log" 2>&1; then
+    printf '%s通过%s\n' "$GREEN" "$NC"
+    rm -f "$log"
+  else
+    code=$?
+    printf '%s未通过%s (exit %s)\n' "$RED" "$NC" "$code"
+    echo '----------------------------------------------------------------------'
+    cat "$log"
+    echo '----------------------------------------------------------------------'
+    printf '%s✗ 拦截项 [%s]%s\n' "$RED" "$label" "$NC"
+    echo "  命令: $cmd"
+    echo "  原因: 上方为该步骤的完整输出；临时日志: $log"
+    echo ''
+    failures=$((failures + 1))
+    failed_logs="$failed_logs $log"
+  fi
+}
+
+# npm 模块依赖未安装时给出明确指引，避免出现含义不清的 command not found
+need_npm_deps() {
+  dir=$1
+  if [ ! -d "$dir/node_modules" ]; then
+    printf '%s✗ 拦截项 [%s 依赖]%s\n' "$RED" "$dir" "$NC" >&2
+    echo "  原因: $dir/node_modules 不存在，依赖尚未安装" >&2
+    echo "  请先执行: npm install --prefix $dir" >&2
+    echo '' >&2
+    failures=$((failures + 1))
+    return 1
+  fi
+}
+
+cli=0; web=0; api=0
+echo "$changed" | grep -q '^apps/cli/' && cli=1
+echo "$changed" | grep -q '^apps/web/' && web=1
+echo "$changed" | grep -q '^services/api/' && api=1
+
+echo '本次提交改动涉及模块的检查（未涉及的模块不跑）:'
+
+if [ "$cli" -eq 1 ]; then
+  need_npm_deps apps/cli && run_step 'cli 测试 (vitest)' 'npm test --prefix apps/cli'
+fi
+if [ "$web" -eq 1 ]; then
+  if need_npm_deps apps/web; then
+    run_step 'web 类型检查 (typecheck)' 'npm run typecheck --prefix apps/web'
+    run_step 'web 代码规范 (lint)' 'npm run lint --prefix apps/web'
+  fi
+fi
+if [ "$api" -eq 1 ]; then
+  run_step 'api 测试 (gradle test)' './services/api/gradlew -p services/api test --no-daemon'
+fi
+if [ $((cli + web + api)) -eq 0 ]; then
+  echo '（改动未涉及 apps/cli、apps/web、services/api，跳过模块测试）'
+fi
+
+if [ "$failures" -gt 0 ]; then
+  printf '%s✗ pre-commit 共 %s 项检查未通过，提交已拦截%s\n' "$RED" "$failures" "$NC" >&2
+  echo "  失败项及原因见上方各【拦截项】区块；临时日志:$failed_logs" >&2
+  exit 1
+fi
+exit 0

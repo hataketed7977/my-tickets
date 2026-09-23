@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'jacoco'
     id 'org.springframework.boot' version '3.4.5'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -42,8 +43,44 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+jacoco {
+    toolVersion = '0.8.12'
+}
+
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy 'jacocoTestReport'
+}
+
+tasks.named('jacocoTestReport') {
+    dependsOn 'test'
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// 覆盖率防退化门禁。阈值刻意低于当前实测值（LINE 74.68% / BRANCH 53.03%），
+// 只拦“显著退化”，给新增样板代码/DTO/配置留出波动缓冲，避免门禁噪音化。
+tasks.named('jacocoTestCoverageVerification') {
+    dependsOn 'test'
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.70
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.45
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'jacocoTestCoverageVerification'
 }
 
 tasks.withType(JavaCompile).configureEach {

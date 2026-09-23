@@ -1,0 +1,95 @@
+#!/bin/sh
+# pre-push：仅当本次推送的提交范围内包含后端 (services/api) 改动时，
+# 才运行 JaCoCo 覆盖率门禁；纯前端/文档推送不跑。
+#
+# Git 调用约定: $1 = 远端名(或 URL), $2 = 远端 URL
+# stdin 每行: <local ref> SP <local sha> SP <remote ref> SP <remote sha> LF
+set -u
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+cd "$repo_root" || exit 1
+
+remote=${1:-origin}
+zero=0000000000000000000000000000000000000000
+
+if [ -t 1 ]; then
+  RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); YELLOW=$(printf '\033[33m'); NC=$(printf '\033[0m')
+else
+  RED=''; GREEN=''; YELLOW=''; NC=''
+fi
+
+# 解析某条待推送 ref，输出它相对远端基线新增提交所改动的文件
+range_files() {
+  _local_ref=$1 _local_sha=$2 _remote_sha=$3
+  base=''
+  if [ "$_remote_sha" != "$zero" ] && git cat-file -e "$_remote_sha" 2>/dev/null; then
+    base=$_remote_sha
+  else
+    # 新分支（远端还没有该 ref）：尝试与远端默认分支找共同祖先
+    for ref in "refs/remotes/$remote/HEAD" "refs/remotes/$remote/main" "refs/remotes/$remote/master"; do
+      if mb=$(git merge-base "$_local_sha" "$ref" 2>/dev/null); then base=$mb; break; fi
+    done
+  fi
+  if [ -n "$base" ]; then
+    git diff --name-only "$base" "$_local_sha"
+  else
+    # 找不到可靠基线时返回非 0，由调用方按“从严”处理（直接跑门禁）
+    return 2
+  fi
+}
+
+api_changed=0
+undecidable=0
+files_all=''
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_ref:-}" ] && continue
+  # 删除分支：本地 sha 为全 0，无需检查
+  [ "$local_sha" = "$zero" ] && continue
+  files=$(range_files "$local_ref" "$local_sha" "$remote_sha") || undecidable=1
+  files_all="$files_all
+$files"
+done
+
+echo "$files_all" | grep -q '^services/api/' && api_changed=1
+
+# 推送范围无法可靠判断（如新分支且无远端基线引用）时，从严执行门禁
+if [ "$undecidable" -eq 1 ]; then
+  api_changed=1
+fi
+
+if [ "$api_changed" -eq 0 ]; then
+  exit 0
+fi
+
+echo '检测到 services/api 改动，运行后端覆盖率门禁（JaCoCo）...'
+changed_api=$(echo "$files_all" | grep '^services/api/' | sed 's/^/  - /')
+[ -n "$changed_api" ] && echo "改动文件:" && echo "$changed_api"
+
+log=$(mktemp)
+cmd='./services/api/gradlew -p services/api jacocoTestCoverageVerification --no-daemon'
+if sh -c "$cmd" >"$log" 2>&1; then
+  printf '%s✓ 覆盖率门禁通过%s\n' "$GREEN" "$NC"
+  rm -f "$log"
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+${RED}✗ 推送被拦截：后端覆盖率门禁未通过${NC}
+  命令: $cmd
+  临时日志: $log
+----------------------------------------------------------------------
+EOF
+cat "$log" >&2
+cat >&2 <<EOF
+----------------------------------------------------------------------
+${RED}【拦截项】JaCoCo 覆盖率门禁${NC}
+  阈值（防退化基线）: LINE >= 70% , BRANCH >= 45%（bundle 整体口径）
+  原因: 上方日志中 “Rule violated ...” 行说明了具体是哪一项、
+        实际比例与期望下限。覆盖率下降通常意味着新增逻辑缺少对应测试。
+  报告路径:
+    HTML: services/api/build/reports/jacoco/test/html/index.html
+    XML : services/api/build/reports/jacoco/test/jacocoTestReport.xml
+  处理: 为新增逻辑补测试后重新推送；仅在确有把握时才用 git push --no-verify 绕过
+EOF
+exit 1

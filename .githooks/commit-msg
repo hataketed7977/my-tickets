@@ -1,0 +1,45 @@
+#!/bin/sh
+# 校验提交信息遵循仓库历史使用的 Conventional Commits 规范：
+#   <type>: <description>
+#   <type>(<scope>): <description>
+# 历史示例：feat: add CLI list command / refactor(web): organize ticket hooks
+set -u
+
+msg_file=${1:?usage: commit-msg <message-file>}
+subject=$(head -n1 "$msg_file")
+
+# 合并、回滚、交互式 rebase 的辅助提交不做校验
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+# 允许的 type 与仓库历史保持一致：feat fix docs chore refactor，另附常用标准类型
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([A-Za-z0-9._/-]+\))?!?: .+'
+
+if printf '%s' "$subject" | grep -Eq "$pattern"; then
+  exit 0
+fi
+
+cat >&2 <<EOF
+✗ 提交被拦截：提交信息不符合仓库规范（Conventional Commits）
+
+  你的提交标题:
+    $subject
+
+  期望格式:
+    <type>: <description>
+    <type>(<scope>): <description>
+
+  示例（取自仓库历史）:
+    feat: add CLI list command for ticket query
+    fix(api): reject ticket without title
+    refactor(web): organize ticket hooks and components
+
+  允许的 type: feat fix docs style refactor perf test build ci chore
+  规则: type 后可选 (scope)，随后必须是英文冒号加空格 ": " 和简述；
+        破坏性变更可在冒号前加 "!"，如 feat!: drop node 20
+
+本次拦截项: commit-msg（提交信息格式）
+修正提交信息后重新提交即可；如确需绕过（不推荐），可使用 git commit --no-verify
+EOF
+exit 1
